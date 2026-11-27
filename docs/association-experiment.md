@@ -318,3 +318,9 @@ decoding, network size, fixed weights never changing, reward weights changing,
 zero reward during evaluation, same-seed reproducibility, different-seed
 variation, above-chance acquisition, controls not learning, reversal adaptation,
 summary consistency, CSV/JSONL export, and configuration validation.
+
+## 11. Automated paired-seed comparison
+
+The repository includes a manual GitHub Actions workflow named **Associative learning comparison**. Open the Actions tab, select that workflow, choose **Run workflow**, and set the seed count (default 8) and first seed (default 1). It runs `fixed`, `stdp`, `reward`, `reward-homeostasis`, and `shuffled` with the same seed range, then uploads an artifact named `aliva-association-comparison`.
+
+The artifact contains per-seed JSONL trial records, per-seed JSON summaries, and `comparison.csv` with mean and standard deviation for held-out accuracy, retention, reversal, firing rate, and related metrics. This keeps the benchmark off the normal build/test path while making full comparisons reproducible.
