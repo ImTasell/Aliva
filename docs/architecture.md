@@ -46,6 +46,18 @@ Pre/post traces and eligibility decay exponentially. Reward may arrive after the
 
 Eligibility bookkeeping uses an active list so the engine decays traces only for recently eligible plastic synapses rather than scanning every synapse every step. Neuron traces are updated per neuron.
 
+## Homeostatic activity regulation
+
+Homeostasis is optional and disabled by default. When enabled, the brain tracks an exponentially filtered firing-rate estimate for each neuron. The estimate decays with a configurable time constant and receives a spike impulse of 1000/tau_ms Hz for every emitted spike.
+
+A slow intrinsic-bias controller then adjusts a per-neuron bias current:
+
+`bias += adaptation_rate * (target_rate - estimated_rate) * dt_seconds`
+
+The current is clamped to a configured maximum magnitude. Underactive neurons receive positive bias; overactive neurons receive negative bias. The bias affects external current input on the following simulation step. This is a simple homeostatic intrinsic-plasticity approximation, not a fitted biological mechanism and not synaptic scaling.
+
+The controller is disabled by default to preserve existing simulations. Its rate estimate is exposed for experiment telemetry. Tests cover disabled-mode equivalence, the sign of corrections, configured bounds, and invalid parameters.
+
 ## Structural changes
 
 The core can append neurons and synapses at runtime. Neuron IDs are stable, sequential indices and are not reused. Deletion, pruning, growth policies, and connection rewiring are not implemented yet; these need explicit rules and tests before being added.
@@ -53,6 +65,7 @@ The core can append neurons and synapses at runtime. Neuron IDs are stable, sequ
 ## Planned experiments
 
 - Compare ordinary pair-based STDP, reward-modulated STDP, and a fixed-weight baseline on simple associative tasks.
+- Measure firing-rate stability with homeostasis disabled and enabled; sweep target rate, estimator time constant, adaptation rate, and bias limits.
 - Test delayed reward, causal versus anti-causal spike timing, reversal learning, and retention.
 - Add structural plasticity only after a fixed-size network learns a simple association.
 - Make growth proposals occur at simulation boundaries, with deterministic seeds and hard neuron/synapse budgets.
