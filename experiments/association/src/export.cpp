@@ -84,6 +84,7 @@ void write_summary_json(const std::string& path, const Summary& summary) {
     out << "  \"total_trials\": " << summary.total_trials << ",\n";
     out << "  \"total_spikes\": " << summary.total_spikes << ",\n";
     out << "  \"mean_firing_rate_hz\": " << summary.mean_firing_rate_hz << ",\n";
+    out << "  \"mean_abs_homeostatic_bias_mV_per_ms\": " << summary.mean_abs_homeostatic_bias_mV_per_ms << ",\n";
     out << "  \"neuron_count\": " << summary.neuron_count << ",\n";
     out << "  \"synapse_count\": " << summary.synapse_count << ",\n";
     out << "  \"episode_accuracy\": [";
