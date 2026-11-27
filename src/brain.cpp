@@ -66,7 +66,17 @@ NeuronId Brain::add_neuron(NeuronParameters parameters) {
 }
 
 void Brain::connect(NeuronId source, NeuronId target, double weight_mV) {
-    connect_impl(source, target, weight_mV, false);
+    connect_impl(source, target, weight_mV, false, false);
+}
+
+void Brain::connect_stdp(NeuronId source, NeuronId target, double weight_mV) {
+    if (weight_mV == 0.0) {
+        throw std::invalid_argument("An STDP synapse needs a non-zero initial weight to define its polarity.");
+    }
+    if (std::abs(weight_mV) > plasticity_.max_abs_weight_mV) {
+        throw std::invalid_argument("Initial STDP synapse weight exceeds the configured maximum.");
+    }
+    connect_impl(source, target, weight_mV, true, false);
 }
 
 void Brain::connect_plastic(NeuronId source, NeuronId target, double weight_mV) {
@@ -76,10 +86,16 @@ void Brain::connect_plastic(NeuronId source, NeuronId target, double weight_mV) 
     if (std::abs(weight_mV) > plasticity_.max_abs_weight_mV) {
         throw std::invalid_argument("Initial plastic synapse weight exceeds the configured maximum.");
     }
-    connect_impl(source, target, weight_mV, true);
+    connect_impl(source, target, weight_mV, true, true);
 }
 
-void Brain::connect_impl(NeuronId source, NeuronId target, double weight_mV, bool plastic) {
+void Brain::connect_impl(
+    NeuronId source,
+    NeuronId target,
+    double weight_mV,
+    bool plastic,
+    bool reward_modulated
+) {
     const auto source_index = static_cast<std::size_t>(source);
     const auto target_index = static_cast<std::size_t>(target);
     if (source_index >= neurons_.size() || target_index >= neurons_.size()) {
@@ -92,7 +108,15 @@ void Brain::connect_impl(NeuronId source, NeuronId target, double weight_mV, boo
     auto& outgoing = outgoing_synapses_[source_index];
     const auto edge_index = outgoing.size();
     const int polarity = weight_mV < 0.0 ? -1 : 1;
-    outgoing.push_back(Synapse{target, weight_mV, 0.0, plastic, polarity, false});
+    outgoing.push_back(Synapse{
+        target,
+        weight_mV,
+        0.0,
+        plastic,
+        reward_modulated,
+        polarity,
+        false
+    });
 
     try {
         incoming_synapses_[target_index].push_back(
@@ -112,11 +136,37 @@ void Brain::add_eligibility(const SynapseRef& ref, double delta) {
         return;
     }
 
-    synapse.eligibility += delta;
+    if (!std::isfinite(delta)) {
+        throw std::overflow_error("STDP eligibility update overflow.");
+    }
+
+    // Ordinary STDP expresses the timing-dependent change immediately.
+    // Reward-modulated STDP stores the same timing signal as eligibility and
+    // waits for a later modulatory reward.
+    if (!synapse.reward_modulated) {
+        const double weight_delta = plasticity_.learning_rate_mV * delta;
+        if (!std::isfinite(weight_delta)) {
+            throw std::overflow_error("STDP weight update overflow.");
+        }
+        const double updated_magnitude = std::clamp(
+            std::abs(synapse.weight_mV) + weight_delta,
+            0.0,
+            plasticity_.max_abs_weight_mV
+        );
+        synapse.weight_mV = static_cast<double>(synapse.polarity) * updated_magnitude;
+        return;
+    }
+
+    const double updated_eligibility = synapse.eligibility + delta;
+    if (!std::isfinite(updated_eligibility)) {
+        throw std::overflow_error("Eligibility trace overflow.");
+    }
+    synapse.eligibility = updated_eligibility;
+
     if (!synapse.eligibility_active &&
         std::abs(synapse.eligibility) >= kEligibilityEpsilon) {
-        synapse.eligibility_active = true;
         active_eligibility_synapses_.push_back(ref);
+        synapse.eligibility_active = true;
     }
 }
 
