@@ -226,6 +226,9 @@ void disabled_learning_freezes_ordinary_stdp_weights() {
     require(std::abs(brain.synapses_from(source).front().weight_mV - 18.0) < 1e-12,
             "Disabled learning must freeze ordinary STDP weights during evaluation.");
 
+    for (int tick = 0; tick < 5; ++tick) {
+        (void)brain.step(1.0, no_drive);
+    }
     brain.set_learning_enabled(true);
     (void)brain.step(1.0, drive_source);
     (void)brain.step(1.0, no_drive);
