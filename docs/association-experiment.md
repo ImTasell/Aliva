@@ -146,7 +146,7 @@ Per-trial records (§7) plus an aggregate summary:
 - `trials_to_threshold` — training trials to first reach `accuracy_threshold`.
 - `reversal_episode_accuracy`, `reversal_eval_accuracy` — adaptation after swap.
 - `retention_accuracy` — accuracy after the no-training interval.
-- `total_spikes`, `mean_firing_rate_hz`, `neuron_count`, `synapse_count`.
+- `total_spikes`, `mean_firing_rate_hz`, `mean_abs_homeostatic_bias_mV_per_ms`, `neuron_count`, `synapse_count`.
 - `output_weights` — min/max/mean/mean-abs of the hidden→output weights.
 
 ---
