@@ -205,6 +205,17 @@ After associative learning works, give Aliva short symbol sequences and test nex
 
 ---
 
-## Bottom line
+## Implementation status and next step
 
-The next milestone should be **reward-modulated synaptic learning in a small mushroom-body-inspired network**, with an evaluation task and baselines. Do not implement automatic neuron growth until Aliva can learn a simple association without growth. Then we will have a meaningful baseline to test whether self-development actually helps.
+The first reward-modulated STDP mechanism is now implemented in the C++ core:
+
+- `connect()` creates a fixed-weight synapse.
+- `connect_plastic()` creates a synapse with a decaying eligibility trace.
+- Pre-before-post timing contributes potentiating eligibility; post-before-pre contributes depressing eligibility.
+- A signed reward signal converts active eligibility into bounded weight changes.
+- Excitatory/inhibitory polarity is preserved.
+- The active eligibility list avoids scanning every synapse on every simulation step.
+
+The current tests cover causal potentiation, anti-causal depression, delayed reward, fixed-weight controls, inhibitory polarity, and input/configuration validation. This verifies the rule's implementation; it is **not yet evidence that Aliva has learned a meaningful task**.
+
+**Next milestone:** build a small two-cue/two-response associative-learning experiment. Compare fixed weights, ordinary STDP, and reward-modulated STDP on acquisition, reversal learning, and retention. Keep the network size fixed for this experiment. Only add structural growth after the fixed-size learning baseline works.
