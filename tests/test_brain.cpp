@@ -322,6 +322,94 @@ void plastic_inhibitory_synapse_keeps_its_polarity() {
             "Positive reward should strengthen the magnitude of the eligible inhibitory synapse.");
 }
 
+void disabled_homeostasis_preserves_original_simulation() {
+    aliva::HomeostasisParameters disabled;
+    disabled.enabled = false;
+    aliva::Brain default_brain;
+    aliva::Brain explicitly_disabled({}, disabled);
+
+    aliva::NeuronParameters parameters;
+    parameters.firing_threshold_mV = -60.0;
+    const auto a = default_brain.add_neuron(parameters);
+    const auto b = explicitly_disabled.add_neuron(parameters);
+    const std::array<double, 1> current{3.0};
+
+    for (int i = 0; i < 30; ++i) {
+        const auto result_a = default_brain.step(1.0, current);
+        const auto result_b = explicitly_disabled.step(1.0, current);
+        require(result_a.spikes == result_b.spikes,
+                "Disabled homeostasis must preserve the original spike sequence.");
+        require(std::abs(default_brain.neuron(a).membrane_potential_mV() -
+                         explicitly_disabled.neuron(b).membrane_potential_mV()) < 1e-12,
+                "Disabled homeostasis must preserve membrane dynamics.");
+    }
+}
+
+void homeostasis_reduces_bias_for_overactive_neurons() {
+    aliva::HomeostasisParameters homeostasis;
+    homeostasis.enabled = true;
+    homeostasis.target_firing_rate_hz = 5.0;
+    homeostasis.rate_time_constant_ms = 100.0;
+    homeostasis.adaptation_rate_mV_per_ms_per_hz_second = 1.0;
+    homeostasis.max_abs_bias_current_mV_per_ms = 0.25;
+
+    aliva::Brain brain({}, homeostasis);
+    auto parameters = fast_spiking_neuron();
+    parameters.refractory_period_ms = 0.0;
+    const auto neuron = brain.add_neuron(parameters);
+    const std::array<double, 1> strong_drive{20.0};
+
+    for (int tick = 0; tick < 500; ++tick) {
+        (void)brain.step(1.0, strong_drive);
+    }
+
+    require(brain.estimated_firing_rate_hz(neuron) > homeostasis.target_firing_rate_hz,
+            "The sustained strong input should put the estimated rate above target.");
+    require(brain.homeostatic_bias_current_mV_per_ms(neuron) < 0.0,
+            "An overactive neuron should receive a negative homeostatic bias.");
+    require(std::abs(brain.homeostatic_bias_current_mV_per_ms(neuron)) <=
+                homeostasis.max_abs_bias_current_mV_per_ms,
+            "Homeostatic bias must respect its configured bound.");
+}
+
+void homeostasis_increases_bias_for_underactive_neurons() {
+    aliva::HomeostasisParameters homeostasis;
+    homeostasis.enabled = true;
+    homeostasis.target_firing_rate_hz = 10.0;
+    homeostasis.rate_time_constant_ms = 500.0;
+    homeostasis.adaptation_rate_mV_per_ms_per_hz_second = 1.0;
+    homeostasis.max_abs_bias_current_mV_per_ms = 0.5;
+
+    aliva::Brain brain({}, homeostasis);
+    const auto neuron = brain.add_neuron();
+    const std::array<double, 1> no_drive{0.0};
+
+    for (int tick = 0; tick < 100; ++tick) {
+        (void)brain.step(1.0, no_drive);
+    }
+
+    const double bias = brain.homeostatic_bias_current_mV_per_ms(neuron);
+    require(bias > 0.0,
+            "An underactive neuron should receive a positive homeostatic bias.");
+    require(bias <= homeostasis.max_abs_bias_current_mV_per_ms,
+            "Positive homeostatic bias must respect its configured bound.");
+}
+
+void invalid_homeostasis_configuration_is_rejected() {
+    aliva::HomeostasisParameters parameters;
+    parameters.enabled = true;
+    parameters.rate_time_constant_ms = 0.0;
+    require_throws<std::invalid_argument>([&] {
+        aliva::Brain invalid({}, parameters);
+    }, "A zero firing-rate time constant should be rejected.");
+
+    parameters.rate_time_constant_ms = 100.0;
+    parameters.target_firing_rate_hz = -1.0;
+    require_throws<std::invalid_argument>([&] {
+        aliva::Brain invalid({}, parameters);
+    }, "A negative target firing rate should be rejected.");
+}
+
 void invalid_plasticity_configuration_is_rejected() {
     aliva::PlasticityParameters parameters;
     parameters.eligibility_tau_ms = 0.0;
@@ -354,6 +442,10 @@ int main() {
         {"ordinary STDP depresses without reward", unmodulated_stdp_depresses_post_before_pre},
         {"fixed synapses remain fixed", fixed_synapses_do_not_learn},
         {"inhibitory polarity is preserved", plastic_inhibitory_synapse_keeps_its_polarity},
+        {"disabled homeostasis preserves old behavior", disabled_homeostasis_preserves_original_simulation},
+        {"homeostasis reduces overactive neuron bias", homeostasis_reduces_bias_for_overactive_neurons},
+        {"homeostasis increases underactive neuron bias", homeostasis_increases_bias_for_underactive_neurons},
+        {"invalid homeostasis settings are rejected", invalid_homeostasis_configuration_is_rejected},
         {"invalid plasticity settings are rejected", invalid_plasticity_configuration_is_rejected},
     };
 

@@ -23,9 +23,10 @@ Aliva is **not currently a copied fly brain, a language model, or evidence of ar
 - One-step delayed synaptic event delivery.
 - Runtime neuron and synapse creation.
 - Fixed synapses via Brain::connect().
-- Opt-in plastic synapses via Brain::connect_plastic().
+- Fixed synapses, ordinary STDP synapses, and reward-modulated STDP synapses.
 - Pair-based pre/post timing traces, decaying eligibility traces, and signed reward modulation.
 - Bounded synaptic weight magnitudes and fixed excitatory/inhibitory polarity.
+- Optional per-neuron firing-rate estimates and bounded homeostatic intrinsic-bias regulation.
 - A small executable demonstration and CI build/test workflow.
 - Research notes in docs/research.md.
 
@@ -36,11 +37,9 @@ The learning-rule tests validate timing signs, delayed reward, fixed-weight beha
 - A reproducible task/environment and training loop.
 - Controlled baseline comparisons and experiment metrics.
 - A validated associative-memory behavior.
-- Ordinary STDP as an explicit comparator.
 - Synaptic delays/receptor models beyond the current simple voltage-kick approximation.
 - FlyWire/connectome data import.
 - Structural synapse formation, rewiring, neuron growth, or pruning.
-- Homeostatic activity regulation.
 - Persistent brain checkpoints or memory consolidation.
 - Symbol, sequence, or language learning.
 
@@ -50,7 +49,7 @@ The learning-rule tests validate timing signs, delayed reward, fixed-weight beha
 |---|---|---|
 | M0 — Neural foundation | Stable LIF simulator, sparse edges, tests, CI | Complete |
 | M1 — Associative learning | Learn two cue-to-response associations from feedback | Next |
-| M2 — Learning-rule validation | Compare fixed weights, STDP, reward-STDP; test stability and sensitivity | In progress / parallel review |
+| M2 — Learning-rule validation | Compare fixed weights, STDP, reward-STDP; validate homeostatic stability and sensitivity | In progress / parallel review |
 | M3 — Biological circuit grounding | Import a small, documented mushroom-body-inspired FlyWire subgraph | Planned |
 | M4 — Structural development | Bounded synapse growth/rewiring and artificial neuron creation/pruning | Planned |
 | M5 — Memory and persistence | Save/load complete neural state and test retention/consolidation | Planned |
@@ -80,7 +79,7 @@ Build a small experiment where Aliva receives one of two input cues and chooses 
 1. **Fixed baseline:** identical topology and initial weights, no learning.
 2. **Reward-modulated STDP:** task-dependent reward signal.
 3. **Control:** shuffled or unrelated reward feedback, to test whether improvement depends on meaningful feedback.
-4. **Optional ordinary-STDP comparator:** add an explicit unmodulated pair-based rule rather than quietly treating it as the same thing as task reward.
+4. **Ordinary-STDP comparator:** measure unmodulated pair-based learning separately from reward-modulated learning.
 
 ### Metrics to record
 
@@ -140,7 +139,7 @@ Implement these as separate, testable mechanisms:
 2. **Neuron creation:** allocate a small group of new artificial neurons.
 3. **Integration:** give new neurons constrained candidate inputs/outputs and allow learning to select useful connections.
 4. **Pruning:** remove persistently unused or unhelpful connections/neurons under explicit rules.
-5. **Homeostasis:** regulate activity and prevent silent or runaway circuits.
+5. **Homeostasis integration:** tune the existing intrinsic-bias controller alongside new structural mechanisms and cell-type-specific activity targets.
 
 Growth must be bounded by per-episode and total neuron/synapse budgets. Make growth proposals deterministic under a recorded seed and apply topology changes at simulation boundaries. Log every growth/pruning event.
 
@@ -199,7 +198,7 @@ There is currently one additional coding agent available. Do not split the work 
 - A seeded two-cue/two-response associative conditioning task.
 - A clear trial lifecycle: cue presentation, network response, reward/feedback, and evaluation.
 - Input encoding and deterministic output decoding using the current Brain API.
-- Experimental modes for fixed weights, reward-modulated STDP, and shuffled/uninformative reward.
+- Experimental modes for fixed weights, ordinary STDP, reward-modulated STDP, and shuffled/uninformative reward.
 - Training/evaluation separation. Evaluation must not update weights.
 - CSV or JSONL results with seed, parameters, trial index, cue, selected response, reward, and correctness.
 - Metrics for acquisition, held-out accuracy, reversal learning, retention, spike counts, and network size.
