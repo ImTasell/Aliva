@@ -1,0 +1,63 @@
+name: Associative learning comparison
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: Number of paired seeds to run per condition
+        required: false
+        default: "8"
+      first_seed:
+        description: First RNG seed
+        required: false
+        default: "1"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/association-comparison.yml"
+      - "scripts/summarize_association.py"
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run paired-seed conditions
+        env:
+          SEED_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.seeds || '8' }}
+          FIRST_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.first_seed || '1' }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/association
+          for mode in fixed stdp reward reward-homeostasis shuffled; do
+            echo "Running ${mode}: ${SEED_COUNT} seeds from ${FIRST_SEED}"
+            ./build/aliva_association \
+              --mode "${mode}" \
+              --seed "${FIRST_SEED}" \
+              --seeds "${SEED_COUNT}" \
+              --format jsonl \
+              --out "artifacts/association/${mode}"
+          done
+          python3 scripts/summarize_association.py \
+            artifacts/association \
+            artifacts/association/comparison.csv
+
+      - name: Upload benchmark results
+        uses: actions/upload-artifact@v4
+        with:
+          name: aliva-association-comparison
+          path: artifacts/association/
+          if-no-files-found: error
+          retention-days: 30
