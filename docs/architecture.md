@@ -36,6 +36,13 @@ Three connection modes are available:
 - connect_stdp() creates an ordinary pair-based STDP synapse. Timing-dependent updates change its weight magnitude directly, without reward.
 - connect_plastic() creates a reward-modulated STDP synapse. Timing creates an eligibility trace; a later signed reward signal converts that eligibility into a weight update.
 
+Learning can be paused with `set_learning_enabled(false)` while simulation
+continues. This freezes both ordinary STDP updates and reward-modulated weight
+updates; timing traces decay but new plasticity events are not accumulated. The
+experiment harness uses this during held-out evaluation. The homeostatic
+controller can be independently paused with `set_homeostasis_enabled(false)`;
+firing-rate telemetry continues while bias adaptation is paused.
+
 The timing convention is:
 
 - a presynaptic spike following a recent postsynaptic spike contributes a negative (depressing) timing term;
