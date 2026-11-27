@@ -16,7 +16,7 @@ namespace aliva::assoc {
 //  * ShuffledReward - hidden->output synapses are plastic but the modulatory
 //                     signal is an uninformative random +/-1 that is
 //                     independent of the response (control condition).
-enum class Mode { Fixed, RewardSTDP, ShuffledReward };
+enum class Mode { Fixed, OrdinarySTDP, RewardSTDP, RewardSTDPHomeostasis, ShuffledReward };
 
 [[nodiscard]] std::string to_string(Mode mode);
 
@@ -92,6 +92,7 @@ struct Config {
     TimingConfig timing;
     TaskConfig task;
     PlasticityParameters plasticity{default_plasticity()};
+    HomeostasisParameters homeostasis;
     std::uint64_t seed{1};
     std::string label;
 
