@@ -192,6 +192,44 @@ void post_before_pre_pairing_produces_depression() {
             "Positive reward should express the depression eligibility of a post-before-pre pair.");
 }
 
+void unmodulated_stdp_potentiates_without_reward() {
+    aliva::Brain brain(fast_plasticity());
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_stdp(source, target, 18.0);
+
+    const std::array<double, 2> drive_source{20.0, 0.0};
+    const std::array<double, 2> no_drive{0.0, 0.0};
+
+    (void)brain.step(1.0, drive_source);
+    const double before_post = brain.synapses_from(source).front().weight_mV;
+    (void)brain.step(1.0, no_drive, 0.0);
+    const double after_post = brain.synapses_from(source).front().weight_mV;
+
+    require(std::abs(before_post - 18.0) < 1e-12,
+            "A pre spike alone should not yet change an STDP synapse.");
+    require(after_post > before_post,
+            "Pre-before-post pairing should potentiate an ordinary STDP synapse without reward.");
+}
+
+void unmodulated_stdp_depresses_post_before_pre() {
+    aliva::Brain brain(fast_plasticity());
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_stdp(source, target, 18.0);
+
+    const std::array<double, 2> drive_target{0.0, 20.0};
+    const std::array<double, 2> drive_source{20.0, 0.0};
+
+    (void)brain.step(1.0, drive_target);
+    const double before_pre = brain.synapses_from(source).front().weight_mV;
+    (void)brain.step(1.0, drive_source, 0.0);
+    const double after_pre = brain.synapses_from(source).front().weight_mV;
+
+    require(after_pre < before_pre,
+            "Post-before-pre pairing should depress an ordinary STDP synapse without reward.");
+}
+
 void fixed_synapses_do_not_learn() {
     aliva::Brain brain(fast_plasticity());
     const auto source = brain.add_neuron(fast_spiking_neuron());
@@ -254,6 +292,8 @@ int main() {
         {"reward-modulated STDP potentiates", reward_modulated_stdp_potentiates_pre_before_post},
         {"eligibility supports delayed reward", eligibility_trace_allows_delayed_reward},
         {"post-before-pre pairing depresses", post_before_pre_pairing_produces_depression},
+        {"ordinary STDP potentiates without reward", unmodulated_stdp_potentiates_without_reward},
+        {"ordinary STDP depresses without reward", unmodulated_stdp_depresses_post_before_pre},
         {"fixed synapses remain fixed", fixed_synapses_do_not_learn},
         {"inhibitory polarity is preserved", plastic_inhibitory_synapse_keeps_its_polarity},
         {"invalid plasticity settings are rejected", invalid_plasticity_configuration_is_rejected},
