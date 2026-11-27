@@ -416,6 +416,30 @@ void homeostasis_increases_bias_for_underactive_neurons() {
             "Positive homeostatic bias must respect its configured bound.");
 }
 
+void homeostasis_can_be_paused_during_evaluation() {
+    aliva::HomeostasisParameters homeostasis;
+    homeostasis.enabled = true;
+    homeostasis.target_firing_rate_hz = 10.0;
+    homeostasis.rate_time_constant_ms = 500.0;
+    homeostasis.adaptation_rate_mV_per_ms_per_hz_second = 1.0;
+    homeostasis.max_abs_bias_current_mV_per_ms = 0.5;
+
+    aliva::Brain brain({}, homeostasis);
+    const auto neuron = brain.add_neuron();
+    const std::array<double, 1> no_drive{0.0};
+    brain.set_homeostasis_enabled(false);
+    for (int tick = 0; tick < 100; ++tick) {
+        (void)brain.step(1.0, no_drive);
+    }
+    require(brain.homeostatic_bias_current_mV_per_ms(neuron) == 0.0,
+            "Paused homeostasis must not adapt intrinsic bias during evaluation.");
+
+    brain.set_homeostasis_enabled(true);
+    (void)brain.step(1.0, no_drive);
+    require(brain.homeostatic_bias_current_mV_per_ms(neuron) > 0.0,
+            "Re-enabled homeostasis must resume intrinsic-bias adaptation.");
+}
+
 void invalid_homeostasis_configuration_is_rejected() {
     aliva::HomeostasisParameters parameters;
     parameters.enabled = true;
@@ -467,6 +491,7 @@ int main() {
         {"disabled homeostasis preserves old behavior", disabled_homeostasis_preserves_original_simulation},
         {"homeostasis reduces overactive neuron bias", homeostasis_reduces_bias_for_overactive_neurons},
         {"homeostasis increases underactive neuron bias", homeostasis_increases_bias_for_underactive_neurons},
+        {"homeostasis can be paused during evaluation", homeostasis_can_be_paused_during_evaluation},
         {"invalid homeostasis settings are rejected", invalid_homeostasis_configuration_is_rejected},
         {"invalid plasticity settings are rejected", invalid_plasticity_configuration_is_rejected},
     };
