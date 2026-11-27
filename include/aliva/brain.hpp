@@ -25,6 +25,19 @@ struct PlasticityParameters {
     double max_abs_weight_mV{50.0};
 };
 
+struct HomeostasisParameters {
+    // Disabled by default so existing simulations retain their original behavior.
+    bool enabled{false};
+
+    // Exponentially filtered target firing rate for each neuron.
+    double target_firing_rate_hz{5.0};
+    double rate_time_constant_ms{1000.0};
+
+    // Change in intrinsic bias current (mV/ms) per Hz error per simulated second.
+    double adaptation_rate_mV_per_ms_per_hz_second{0.05};
+    double max_abs_bias_current_mV_per_ms{1.0};
+};
+
 struct Synapse {
     NeuronId target{};
     double weight_mV{};
@@ -45,7 +58,10 @@ struct StepResult {
 // synaptic voltage kicks at the beginning of the following step.
 class Brain {
 public:
-    explicit Brain(PlasticityParameters plasticity = {});
+    explicit Brain(
+        PlasticityParameters plasticity = {},
+        HomeostasisParameters homeostasis = {}
+    );
 
     [[nodiscard]] NeuronId add_neuron(NeuronParameters parameters = {});
 
@@ -72,6 +88,8 @@ public:
     [[nodiscard]] std::size_t neuron_count() const noexcept;
     [[nodiscard]] std::size_t synapse_count() const noexcept;
     [[nodiscard]] double simulation_time_ms() const noexcept;
+    [[nodiscard]] double estimated_firing_rate_hz(NeuronId id) const;
+    [[nodiscard]] double homeostatic_bias_current_mV_per_ms(NeuronId id) const;
     [[nodiscard]] const Neuron& neuron(NeuronId id) const;
     [[nodiscard]] std::span<const Synapse> synapses_from(NeuronId source) const;
     [[nodiscard]] const std::vector<NeuronId>& last_spikes() const noexcept;
@@ -92,12 +110,15 @@ private:
     void add_eligibility(const SynapseRef& ref, double delta);
 
     PlasticityParameters plasticity_;
+    HomeostasisParameters homeostasis_;
     std::vector<Neuron> neurons_;
     std::vector<std::vector<Synapse>> outgoing_synapses_;
     std::vector<std::vector<SynapseRef>> incoming_synapses_;
     std::vector<double> pending_synaptic_kicks_mV_;
     std::vector<double> pre_traces_;
     std::vector<double> post_traces_;
+    std::vector<double> firing_rate_estimates_hz_;
+    std::vector<double> homeostatic_bias_currents_mV_per_ms_;
     std::vector<SynapseRef> active_eligibility_synapses_;
     std::vector<NeuronId> last_spikes_;
     std::size_t synapse_count_{0};
