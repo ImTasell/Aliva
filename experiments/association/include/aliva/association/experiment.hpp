@@ -62,6 +62,10 @@ struct Summary {
     std::size_t total_spikes{0};
     double mean_firing_rate_hz{0.0};
     double mean_abs_homeostatic_bias_mV_per_ms{0.0};
+    double homeostasis_target_firing_rate_hz{0.0};
+    double homeostasis_rate_time_constant_ms{0.0};
+    double homeostasis_adaptation_rate{0.0};
+    double homeostasis_max_abs_bias_mV_per_ms{0.0};
     std::size_t neuron_count{0};
     std::size_t synapse_count{0};
     WeightStats output_weights;
