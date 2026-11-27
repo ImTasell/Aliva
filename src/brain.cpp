@@ -43,11 +43,41 @@ void validate_plasticity(const PlasticityParameters& parameters) {
     }
 }
 
+void validate_homeostasis(const HomeostasisParameters& parameters) {
+    const double values[] = {
+        parameters.target_firing_rate_hz,
+        parameters.rate_time_constant_ms,
+        parameters.adaptation_rate_mV_per_ms_per_hz_second,
+        parameters.max_abs_bias_current_mV_per_ms
+    };
+    for (const double value : values) {
+        if (!std::isfinite(value)) {
+            throw std::invalid_argument("Homeostasis parameters must all be finite.");
+        }
+    }
+
+    if (parameters.target_firing_rate_hz <= 0.0) {
+        throw std::invalid_argument("Homeostatic target firing rate must be positive.");
+    }
+    if (parameters.rate_time_constant_ms <= 0.0 ||
+        !std::isfinite(1000.0 / parameters.rate_time_constant_ms)) {
+        throw std::invalid_argument("Homeostatic rate time constant must be positive and representable.");
+    }
+    if (parameters.adaptation_rate_mV_per_ms_per_hz_second < 0.0) {
+        throw std::invalid_argument("Homeostatic adaptation rate cannot be negative.");
+    }
+    if (parameters.max_abs_bias_current_mV_per_ms <= 0.0) {
+        throw std::invalid_argument("Maximum homeostatic bias current must be positive.");
+    }
+}
+
 } // namespace
 
-Brain::Brain(PlasticityParameters plasticity)
-    : plasticity_(plasticity) {
+Brain::Brain(PlasticityParameters plasticity, HomeostasisParameters homeostasis)
+    : plasticity_(plasticity),
+      homeostasis_(homeostasis) {
     validate_plasticity(plasticity_);
+    validate_homeostasis(homeostasis_);
 }
 
 NeuronId Brain::add_neuron(NeuronParameters parameters) {
@@ -62,6 +92,8 @@ NeuronId Brain::add_neuron(NeuronParameters parameters) {
     pending_synaptic_kicks_mV_.push_back(0.0);
     pre_traces_.push_back(0.0);
     post_traces_.push_back(0.0);
+    firing_rate_estimates_hz_.push_back(0.0);
+    homeostatic_bias_currents_mV_per_ms_.push_back(0.0);
     return id;
 }
 
@@ -197,6 +229,8 @@ StepResult Brain::step(
     const double pre_decay = std::exp(-dt_ms / plasticity_.pre_trace_tau_ms);
     const double post_decay = std::exp(-dt_ms / plasticity_.post_trace_tau_ms);
     const double eligibility_decay = std::exp(-dt_ms / plasticity_.eligibility_tau_ms);
+    const double firing_rate_decay = std::exp(-dt_ms / homeostasis_.rate_time_constant_ms);
+    const double spike_rate_increment = 1000.0 / homeostasis_.rate_time_constant_ms;
 
     for (double& trace : pre_traces_) {
         trace *= pre_decay;
@@ -238,15 +272,49 @@ StepResult Brain::step(
         const double external_current = external_currents_mV_per_ms.empty()
             ? 0.0
             : external_currents_mV_per_ms[index];
+        const double homeostatic_bias = homeostasis_.enabled
+            ? homeostatic_bias_currents_mV_per_ms_[index]
+            : 0.0;
+        const double effective_current = external_current + homeostatic_bias;
+        if (!std::isfinite(effective_current)) {
+            throw std::overflow_error("Combined external and homeostatic current overflow.");
+        }
+
         const bool fired = neurons_[index].integrate(
             dt_ms,
-            external_current,
+            effective_current,
             pending_synaptic_kicks_mV_[index]
         );
         pending_synaptic_kicks_mV_[index] = 0.0;
 
+        // Exponentially filtered spike count (Hz). The impulse increment is
+        // 1000/tau_ms, making the steady-state estimate track spikes/second.
+        double& rate_estimate = firing_rate_estimates_hz_[index];
+        rate_estimate *= firing_rate_decay;
         if (fired) {
+            rate_estimate += spike_rate_increment;
             current_spikes.push_back(static_cast<NeuronId>(index));
+        }
+
+        if (!std::isfinite(rate_estimate)) {
+            throw std::overflow_error("Firing-rate estimate overflow.");
+        }
+
+        if (homeostasis_.enabled) {
+            const double rate_error = homeostasis_.target_firing_rate_hz - rate_estimate;
+            const double bias_delta =
+                homeostasis_.adaptation_rate_mV_per_ms_per_hz_second *
+                rate_error * (dt_ms / 1000.0);
+            if (!std::isfinite(bias_delta)) {
+                throw std::overflow_error("Homeostatic bias update overflow.");
+            }
+
+            double& bias = homeostatic_bias_currents_mV_per_ms_[index];
+            bias = std::clamp(
+                bias + bias_delta,
+                -homeostasis_.max_abs_bias_current_mV_per_ms,
+                homeostasis_.max_abs_bias_current_mV_per_ms
+            );
         }
     }
 
@@ -321,6 +389,22 @@ std::size_t Brain::synapse_count() const noexcept {
 
 double Brain::simulation_time_ms() const noexcept {
     return simulation_time_ms_;
+}
+
+double Brain::estimated_firing_rate_hz(NeuronId id) const {
+    const auto index = static_cast<std::size_t>(id);
+    if (index >= firing_rate_estimates_hz_.size()) {
+        throw std::out_of_range("Neuron ID does not exist.");
+    }
+    return firing_rate_estimates_hz_[index];
+}
+
+double Brain::homeostatic_bias_current_mV_per_ms(NeuronId id) const {
+    const auto index = static_cast<std::size_t>(id);
+    if (index >= homeostatic_bias_currents_mV_per_ms_.size()) {
+        throw std::out_of_range("Neuron ID does not exist.");
+    }
+    return homeostatic_bias_currents_mV_per_ms_[index];
 }
 
 const Neuron& Brain::neuron(NeuronId id) const {
