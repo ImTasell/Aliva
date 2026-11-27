@@ -118,7 +118,7 @@ void network_size_matches_configuration() {
     std::mt19937_64 rng{7};
     aliva::Brain brain;
     const NetworkHandles handles =
-        build_network(brain, config.network, make_cue_patterns(12, 3, 3.0, rng), true, rng);
+        build_network(brain, config.network, make_cue_patterns(12, 3, 3.0, rng), Mode::RewardSTDP, rng);
 
     require(brain.neuron_count() == 12 + 40 + 2,
             "Neuron count must equal input + hidden + output.");
