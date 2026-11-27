@@ -1,0 +1,66 @@
+name: Aliva homeostasis bias-cap sweep
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: Paired seeds per bias cap
+        required: false
+        default: "8"
+      first_seed:
+        description: First RNG seed
+        required: false
+        default: "1"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/homeostasis-cap-sweep.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run bias-cap sweep
+        env:
+          SEED_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.seeds || '8' }}
+          FIRST_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.first_seed || '1' }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/homeostasis-cap
+          for max_bias in 0.05 0.10 0.15 0.25; do
+            prefix="artifacts/homeostasis-cap/max${max_bias}"
+            echo "max bias=${max_bias} mV/ms seeds=${SEED_COUNT}"
+            ./build/aliva_association \
+              --mode reward-homeostasis \
+              --seed "${FIRST_SEED}" \
+              --seeds "${SEED_COUNT}" \
+              --homeo-target 5 \
+              --homeo-adaptation 0.005 \
+              --homeo-max-bias "${max_bias}" \
+              --format jsonl \
+              --out "${prefix}"
+          done
+          python3 scripts/summarize_association.py \
+            artifacts/homeostasis-cap \
+            artifacts/homeostasis-cap/comparison.csv
+
+      - name: Upload bias-cap results
+        uses: actions/upload-artifact@v4
+        with:
+          name: aliva-homeostasis-bias-cap-sweep
+          path: artifacts/homeostasis-cap/
+          if-no-files-found: error
+          retention-days: 30
