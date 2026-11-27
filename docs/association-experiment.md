@@ -1,7 +1,7 @@
 # Associative-learning experiment (M1)
 
 **Status:** reference implementation for milestone M1 (associative learning)
-**Branch:** `feat/association-benchmark`
+**Branch:** `feat/association-benchmark-main`
 **Scope:** experiment harness only. This document describes the task, the code,
 how to run it, and how to interpret the results. It does **not** modify the
 neural core (`include/aliva/**`, `src/**`) or the existing core tests.
@@ -100,7 +100,9 @@ rule differ.
 | `reward` | plastic (`connect_plastic`) | `+1` if the decoded response is correct, `−1` otherwise |
 | `shuffled` | plastic (`connect_plastic`) | exactly-balanced, seeded-shuffled `±1`, independent of the response |
 
-Ordinary, unmodulated STDP (`connect_stdp`) is not included in this M1 harness because this PR targets the then-current public API on `main`. It should be added as a separate learning-rule condition after the ordinary-STDP core change is integrated; it must not be conflated with reward-modulated STDP.\n\nThe **shuffled** control keeps the reward statistics of the learning condition
+Ordinary, unmodulated STDP (`connect_stdp`) is not included in this M1 harness; it is reserved for the M2 learning-rule comparison and must not be conflated with reward-modulated STDP.
+
+The **shuffled** control keeps the reward statistics of the learning condition
 (half `+1`, half `−1`) but destroys the contingency, testing whether improvement
 depends on *meaningful* feedback.
 
@@ -270,10 +272,7 @@ Result files are generated locally by the commands above; benchmark output artif
    uncorrelated in expectation, but a finite run can by chance correlate with
    correctness and produce weak spurious learning on some seeds (mean 0.36, max
    0.70). It never matches the learning condition.
-6. **No homeostasis / consolidation / persistence.** There is no activity
-   regulation, weight decay, or checkpointing. "Retention" here only verifies
-   that weights persist unchanged across a no-training interval (there is no
-   mechanism that could erode them).
+6. **No consolidation / persistence.** The core now has optional homeostatic intrinsic-bias regulation, but this M1 experiment leaves it disabled. There is no weight decay, checkpointing, or active consolidation. “Retention” here only verifies that weights persist unchanged across a no-training interval.
 7. **Model parameters are not biological.** Weights, thresholds, time constants,
    learning rate, and the weight bound are simulation units chosen for this task,
    not fitted to any cell type. The weight bound (`max_abs_weight_mV = 0.3`) is
