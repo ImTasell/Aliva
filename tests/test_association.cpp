@@ -159,6 +159,32 @@ void reward_mode_changes_weights() {
     require(before != after, "Reward-modulated STDP must change weights during training.");
 }
 
+void ordinary_stdp_mode_changes_weights_without_reward() {
+    Config config;
+    config.mode = Mode::OrdinarySTDP;
+    Experiment experiment(config, 1);
+    const auto before = experiment.hidden_to_output_weights();
+    experiment.run();
+    const auto after = experiment.hidden_to_output_weights();
+    require(before != after,
+            "Ordinary STDP must modify weights from spike timing without task reward.");
+    for (const TrialRecord& record : experiment.records()) {
+        require(record.reward == 0.0,
+                "Ordinary STDP must not receive task reward or a modulatory signal.");
+    }
+}
+
+void reward_homeostasis_mode_is_explicit() {
+    Config config;
+    config.mode = Mode::RewardSTDPHomeostasis;
+    Experiment experiment(config, 1);
+    require(experiment.config().mode == Mode::RewardSTDPHomeostasis,
+            "Homeostatic reward mode must remain explicit in experiment metadata.");
+    experiment.run();
+    require(experiment.summary().mean_firing_rate_hz >= 0.0,
+            "Homeostatic experiment must report a finite non-negative firing rate.");
+}
+
 void evaluation_phases_supply_zero_reward() {
     Config config;
     config.mode = Mode::RewardSTDP;
@@ -376,6 +402,8 @@ int main() {
         {"network size matches configuration", network_size_matches_configuration},
         {"fixed mode never changes weights", fixed_mode_never_changes_weights},
         {"reward mode changes weights", reward_mode_changes_weights},
+        {"ordinary STDP learns without reward", ordinary_stdp_mode_changes_weights_without_reward},
+        {"reward homeostasis mode is explicit", reward_homeostasis_mode_is_explicit},
         {"evaluation phases supply zero reward", evaluation_phases_supply_zero_reward},
         {"same seed reproduces the run", same_seed_reproduces_the_run},
         {"different seed changes the run", different_seed_changes_the_run},
