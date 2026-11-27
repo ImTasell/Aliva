@@ -192,6 +192,99 @@ void post_before_pre_pairing_produces_depression() {
             "Positive reward should express the depression eligibility of a post-before-pre pair.");
 }
 
+void unmodulated_stdp_potentiates_without_reward() {
+    aliva::Brain brain(fast_plasticity());
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_stdp(source, target, 18.0);
+
+    const std::array<double, 2> drive_source{20.0, 0.0};
+    const std::array<double, 2> no_drive{0.0, 0.0};
+
+    (void)brain.step(1.0, drive_source);
+    const double before_post = brain.synapses_from(source).front().weight_mV;
+    (void)brain.step(1.0, no_drive, 0.0);
+    const double after_post = brain.synapses_from(source).front().weight_mV;
+
+    require(std::abs(before_post - 18.0) < 1e-12,
+            "A pre spike alone should not yet change an STDP synapse.");
+    require(after_post > before_post,
+            "Pre-before-post pairing should potentiate an ordinary STDP synapse without reward.");
+}
+
+void unmodulated_stdp_depresses_post_before_pre() {
+    aliva::Brain brain(fast_plasticity());
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_stdp(source, target, 18.0);
+
+    const std::array<double, 2> drive_target{0.0, 20.0};
+    const std::array<double, 2> drive_source{20.0, 0.0};
+
+    (void)brain.step(1.0, drive_target);
+    const double before_pre = brain.synapses_from(source).front().weight_mV;
+    (void)brain.step(1.0, drive_source, 0.0);
+    const double after_pre = brain.synapses_from(source).front().weight_mV;
+
+    require(after_pre < before_pre,
+            "Post-before-pre pairing should depress an ordinary STDP synapse without reward.");
+}
+
+void negative_reward_punishes_causal_pairing() {
+    aliva::Brain brain(fast_plasticity());
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_plastic(source, target, 18.0);
+
+    const std::array<double, 2> drive_source{20.0, 0.0};
+    const std::array<double, 2> no_drive{0.0, 0.0};
+    (void)brain.step(1.0, drive_source);
+    (void)brain.step(1.0, no_drive, -1.0);
+
+    require(brain.synapses_from(source).front().weight_mV < 18.0,
+            "Negative reward should reduce a causally eligible synaptic weight.");
+}
+
+void plastic_weights_respect_configured_limit() {
+    auto parameters = fast_plasticity();
+    parameters.learning_rate_mV = 1e6;
+    parameters.max_abs_weight_mV = 20.0;
+    aliva::Brain brain(parameters);
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_stdp(source, target, 19.0);
+
+    const std::array<double, 2> drive_source{20.0, 0.0};
+    const std::array<double, 2> no_drive{0.0, 0.0};
+    (void)brain.step(1.0, drive_source);
+    (void)brain.step(1.0, no_drive);
+
+    require(std::abs(brain.synapses_from(source).front().weight_mV) <= 20.0,
+            "STDP must clamp weights to the configured maximum magnitude.");
+}
+
+void eligibility_expires_without_reinforcement() {
+    auto parameters = fast_plasticity();
+    parameters.eligibility_tau_ms = 10.0;
+    aliva::Brain brain(parameters);
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_plastic(source, target, 18.0);
+
+    const std::array<double, 2> drive_source{20.0, 0.0};
+    const std::array<double, 2> no_drive{0.0, 0.0};
+    (void)brain.step(1.0, drive_source);
+    (void)brain.step(1.0, no_drive);
+
+    for (int tick = 0; tick < 500; ++tick) {
+        (void)brain.step(1.0, no_drive);
+    }
+    (void)brain.step(1.0, no_drive, 1.0);
+
+    require(std::abs(brain.synapses_from(source).front().weight_mV - 18.0) < 1e-12,
+            "A reward arriving after eligibility has decayed away must not change the weight.");
+}
+
 void fixed_synapses_do_not_learn() {
     aliva::Brain brain(fast_plasticity());
     const auto source = brain.add_neuron(fast_spiking_neuron());
@@ -254,6 +347,11 @@ int main() {
         {"reward-modulated STDP potentiates", reward_modulated_stdp_potentiates_pre_before_post},
         {"eligibility supports delayed reward", eligibility_trace_allows_delayed_reward},
         {"post-before-pre pairing depresses", post_before_pre_pairing_produces_depression},
+        {"negative reward punishes causal pairing", negative_reward_punishes_causal_pairing},
+        {"plastic weights respect configured limit", plastic_weights_respect_configured_limit},
+        {"eligibility expires without reinforcement", eligibility_expires_without_reinforcement},
+        {"ordinary STDP potentiates without reward", unmodulated_stdp_potentiates_without_reward},
+        {"ordinary STDP depresses without reward", unmodulated_stdp_depresses_post_before_pre},
         {"fixed synapses remain fixed", fixed_synapses_do_not_learn},
         {"inhibitory polarity is preserved", plastic_inhibitory_synapse_keeps_its_polarity},
         {"invalid plasticity settings are rejected", invalid_plasticity_configuration_is_rejected},

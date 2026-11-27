@@ -52,7 +52,7 @@ The core can append neurons and synapses at runtime. Neuron IDs are stable, sequ
 
 ## Planned experiments
 
-- Compare ordinary pair-based STDP with reward-modulated STDP and a fixed-weight baseline on simple associative tasks.
+- Compare ordinary pair-based STDP, reward-modulated STDP, and a fixed-weight baseline on simple associative tasks.
 - Test delayed reward, causal versus anti-causal spike timing, reversal learning, and retention.
 - Add structural plasticity only after a fixed-size network learns a simple association.
 - Make growth proposals occur at simulation boundaries, with deterministic seeds and hard neuron/synapse budgets.
