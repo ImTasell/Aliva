@@ -91,8 +91,8 @@ limit and lose the drive difference that learning must act on.
 ## 3. Experimental modes
 
 `--mode` selects the condition. Topology and initial weights are identical
-across modes for a given seed; only the hidden→output synapses and the reward
-rule differ.
+across modes for a given seed; the learning rule and optional homeostatic
+controller are the experimental variables.
 
 | Mode | Hidden→output synapses | Reward signal |
 |---|---|---|
@@ -110,10 +110,11 @@ depends on *meaningful* feedback.
 
 ### Training vs. evaluation separation
 
-Evaluation phases (`eval`, `retention`, `reversal_eval`) always pass
-`reward = 0.0` to `Brain::step`. Because the core only updates weights when the
-reward is non-zero, evaluation provably cannot change weights. This is asserted
-by a unit test.
+Evaluation phases (`eval`, `retention`, `reversal_eval`) pass `reward = 0.0`
+and explicitly disable synaptic learning. This pauses both direct ordinary-STDP
+updates and reward-modulated weight updates, so held-out evaluation cannot change
+synaptic weights. Homeostatic bias adaptation is also paused during evaluation
+and retention; firing-rate telemetry continues updating.
 
 ---
 
