@@ -7,7 +7,9 @@ namespace aliva::assoc {
 std::string to_string(Mode mode) {
     switch (mode) {
         case Mode::Fixed: return "fixed";
+        case Mode::OrdinarySTDP: return "ordinary_stdp";
         case Mode::RewardSTDP: return "reward_stdp";
+        case Mode::RewardSTDPHomeostasis: return "reward_stdp_homeostasis";
         case Mode::ShuffledReward: return "shuffled_reward";
     }
     return "unknown";
