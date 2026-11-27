@@ -50,7 +50,7 @@ void print_usage(const char* program) {
         "Aliva associative-learning benchmark\n\n"
         "Usage: " << program << " [options]\n\n"
         "Experiment:\n"
-        "  --mode <fixed|reward|shuffled>  Learning condition (default: reward)\n"
+        "  --mode <fixed|stdp|reward|reward-homeostasis|shuffled>  Learning condition (default: reward)\n"
         "  --seed <n>                      Base RNG seed (default: 1)\n"
         "  --seeds <n>                     Run n consecutive seeds (default: 1)\n"
         "  --format <csv|jsonl>            Per-trial output format (default: csv)\n"
@@ -79,7 +79,9 @@ void print_usage(const char* program) {
 
 Mode parse_mode(const std::string& text) {
     if (text == "fixed") return Mode::Fixed;
+    if (text == "stdp" || text == "ordinary_stdp") return Mode::OrdinarySTDP;
     if (text == "reward" || text == "reward_stdp") return Mode::RewardSTDP;
+    if (text == "reward-homeostasis" || text == "reward_stdp_homeostasis") return Mode::RewardSTDPHomeostasis;
     if (text == "shuffled" || text == "shuffled_reward") return Mode::ShuffledReward;
     throw std::invalid_argument("Unknown mode: " + text);
 }
