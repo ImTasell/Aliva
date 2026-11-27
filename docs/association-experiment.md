@@ -100,7 +100,7 @@ rule differ.
 | `reward` | plastic (`connect_plastic`) | `+1` if the decoded response is correct, `−1` otherwise |
 | `shuffled` | plastic (`connect_plastic`) | exactly-balanced, seeded-shuffled `±1`, independent of the response |
 
-The **shuffled** control keeps the reward statistics of the learning condition
+Ordinary, unmodulated STDP (`connect_stdp`) is not included in this M1 harness because this PR targets the then-current public API on `main`. It should be added as a separate learning-rule condition after the ordinary-STDP core change is integrated; it must not be conflated with reward-modulated STDP.\n\nThe **shuffled** control keeps the reward statistics of the learning condition
 (half `+1`, half `−1`) but destroys the contingency, testing whether improvement
 depends on *meaningful* feedback.
 
@@ -240,7 +240,7 @@ Representative single-seed summary (`reward`, seed 1):
 }
 ```
 
-Example result files are provided in `/artifacts/association/`.
+Result files are generated locally by the commands above; benchmark output artifacts are not checked into the repository.
 
 ---
 
