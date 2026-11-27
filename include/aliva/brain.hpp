@@ -79,6 +79,11 @@ public:
     // Pass either no currents (all zero) or one current per neuron.
     // reward_signal is a signed, dimensionless teaching/modulatory signal:
     // positive reinforces eligible timing patterns; negative punishes them.
+    // Pause/resume synaptic plasticity without stopping simulation dynamics.
+    void set_learning_enabled(bool enabled) noexcept;
+    // Pause/resume the configured homeostatic controller (telemetry still updates).
+    void set_homeostasis_enabled(bool enabled) noexcept;
+
     [[nodiscard]] StepResult step(
         double dt_ms,
         std::span<const double> external_currents_mV_per_ms = {},
@@ -111,6 +116,8 @@ private:
 
     PlasticityParameters plasticity_;
     HomeostasisParameters homeostasis_;
+    bool learning_enabled_{true};
+    bool homeostasis_active_{false};
     std::vector<Neuron> neurons_;
     std::vector<std::vector<Synapse>> outgoing_synapses_;
     std::vector<std::vector<SynapseRef>> incoming_synapses_;
