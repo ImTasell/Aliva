@@ -214,9 +214,11 @@ void plastic_inhibitory_synapse_keeps_its_polarity() {
     brain.connect_plastic(source, target, -18.0);
 
     const std::array<double, 2> drive_source{20.0, 0.0};
-    const std::array<double, 2> no_drive{0.0, 0.0};
+    const std::array<double, 2> drive_target_despite_inhibition{0.0, 30.0};
     (void)brain.step(1.0, drive_source);
-    (void)brain.step(1.0, no_drive, 1.0);
+    const auto post = brain.step(1.0, drive_target_despite_inhibition, 1.0);
+    require(post.spikes.size() == 1 && post.spikes.front() == target,
+            "External drive should make the target fire despite the inhibitory input.");
 
     const double learned_weight = brain.synapses_from(source).front().weight_mV;
     require(learned_weight < 0.0,
