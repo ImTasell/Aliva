@@ -43,6 +43,10 @@ struct Options {
     int idle{-1};
     double noise{-1.0};
     double maxw{-1.0};
+    double homeo_target{-1.0};
+    double homeo_tau{-1.0};
+    double homeo_adaptation{-1.0};
+    double homeo_max_bias{-1.0};
 };
 
 void print_usage(const char* program) {
@@ -67,6 +71,10 @@ void print_usage(const char* program) {
         "  --lr <f> --pot <f> --dep <f>    Plasticity learning rate / STDP amplitudes\n"
         "  --elig-tau <f>                  Eligibility time constant (ms)\n"
         "  --maxw <f>                      Maximum absolute weight (mV)\n"
+        "  --homeo-target <hz>             Homeostatic target firing rate\n"
+        "  --homeo-tau <ms>                Homeostatic rate-estimator time constant\n"
+        "  --homeo-adaptation <f>          Homeostatic bias adaptation rate\n"
+        "  --homeo-max-bias <mV/ms>        Maximum absolute homeostatic bias\n"
         "  --out-weight <f>                Initial hidden->output weight (mV)\n"
         "  --hidden-weight <f>             Input->hidden weight (mV)\n"
         "  --inh <f>                       Output mutual-inhibition weight (mV)\n"
@@ -155,6 +163,14 @@ Options parse_args(int argc, char** argv) {
             options.noise = std::stod(next("--noise"));
         } else if (arg == "--maxw") {
             options.maxw = std::stod(next("--maxw"));
+        } else if (arg == "--homeo-target") {
+            options.homeo_target = std::stod(next("--homeo-target"));
+        } else if (arg == "--homeo-tau") {
+            options.homeo_tau = std::stod(next("--homeo-tau"));
+        } else if (arg == "--homeo-adaptation") {
+            options.homeo_adaptation = std::stod(next("--homeo-adaptation"));
+        } else if (arg == "--homeo-max-bias") {
+            options.homeo_max_bias = std::stod(next("--homeo-max-bias"));
         } else {
             throw std::invalid_argument("Unknown argument: " + arg);
         }
@@ -186,6 +202,10 @@ Config make_config(const Options& options) {
     if (options.idle >= 0) config.task.retention_idle_steps = options.idle;
     if (options.noise >= 0.0) config.timing.background_noise_mV_per_ms = options.noise;
     if (options.maxw > 0.0) config.plasticity.max_abs_weight_mV = options.maxw;
+    if (options.homeo_target > 0.0) config.homeostasis.target_firing_rate_hz = options.homeo_target;
+    if (options.homeo_tau > 0.0) config.homeostasis.rate_time_constant_ms = options.homeo_tau;
+    if (options.homeo_adaptation >= 0.0) config.homeostasis.adaptation_rate_mV_per_ms_per_hz_second = options.homeo_adaptation;
+    if (options.homeo_max_bias > 0.0) config.homeostasis.max_abs_bias_current_mV_per_ms = options.homeo_max_bias;
     return config;
 }
 
