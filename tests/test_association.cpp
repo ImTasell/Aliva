@@ -185,6 +185,9 @@ void reward_homeostasis_mode_is_explicit() {
             "Homeostatic experiment must report a finite non-negative firing rate.");
     require(experiment.summary().mean_abs_homeostatic_bias_mV_per_ms > 0.0,
             "Homeostasis mode must actually adapt intrinsic bias during training.");
+    require(experiment.summary().homeostasis_target_firing_rate_hz == config.homeostasis.target_firing_rate_hz &&
+                experiment.summary().homeostasis_adaptation_rate == config.homeostasis.adaptation_rate_mV_per_ms_per_hz_second,
+            "Summary must preserve the homeostatic parameters used by the run.");
 }
 
 void evaluation_phases_supply_zero_reward() {

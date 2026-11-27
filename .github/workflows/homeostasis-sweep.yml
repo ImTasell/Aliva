@@ -1,0 +1,69 @@
+name: Aliva homeostasis parameter sweep
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: Paired seeds per parameter combination
+        required: false
+        default: "8"
+      first_seed:
+        description: First RNG seed
+        required: false
+        default: "1"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/homeostasis-sweep.yml"
+      - "scripts/summarize_association.py"
+
+permissions:
+  contents: read
+
+jobs:
+  sweep:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run homeostasis sweep
+        env:
+          SEED_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.seeds || '8' }}
+          FIRST_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.first_seed || '1' }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/homeostasis
+          for target in 5 10 15 20; do
+            for adaptation in 0.001 0.005; do
+              prefix="artifacts/homeostasis/target${target}_adapt${adaptation}"
+              echo "target=${target}Hz adaptation=${adaptation} seeds=${SEED_COUNT}"
+              ./build/aliva_association \
+                --mode reward-homeostasis \
+                --seed "${FIRST_SEED}" \
+                --seeds "${SEED_COUNT}" \
+                --homeo-target "${target}" \
+                --homeo-adaptation "${adaptation}" \
+                --homeo-max-bias 0.25 \
+                --format jsonl \
+                --out "${prefix}"
+            done
+          done
+          python3 scripts/summarize_association.py \
+            artifacts/homeostasis \
+            artifacts/homeostasis/comparison.csv
+
+      - name: Upload sweep results
+        uses: actions/upload-artifact@v4
+        with:
+          name: aliva-homeostasis-sweep
+          path: artifacts/homeostasis/
+          if-no-files-found: error
+          retention-days: 30
