@@ -76,14 +76,14 @@ public:
     // reward signal converts that trace into a weight change.
     void connect_plastic(NeuronId source, NeuronId target, double weight_mV);
 
-    // Pass either no currents (all zero) or one current per neuron.
-    // reward_signal is a signed, dimensionless teaching/modulatory signal:
-    // positive reinforces eligible timing patterns; negative punishes them.
     // Pause/resume synaptic plasticity without stopping simulation dynamics.
     void set_learning_enabled(bool enabled) noexcept;
     // Pause/resume the configured homeostatic controller (telemetry still updates).
     void set_homeostasis_enabled(bool enabled) noexcept;
 
+    // Pass either no currents (all zero) or one current per neuron.
+    // reward_signal is a signed, dimensionless teaching/modulatory signal:
+    // positive reinforces eligible timing patterns; negative punishes them.
     [[nodiscard]] StepResult step(
         double dt_ms,
         std::span<const double> external_currents_mV_per_ms = {},
