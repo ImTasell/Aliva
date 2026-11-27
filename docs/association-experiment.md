@@ -166,9 +166,13 @@ Run the three conditions for one seed:
 
 ```sh
 ./build/aliva_association --mode reward   --seed 1 --out /tmp/reward
+./build/aliva_association --mode stdp     --seed 1 --out /tmp/stdp
+./build/aliva_association --mode reward-homeostasis --seed 1 --out /tmp/reward-homeostasis
 ./build/aliva_association --mode fixed    --seed 1 --out /tmp/fixed
 ./build/aliva_association --mode shuffled --seed 1 --out /tmp/shuffled
 ```
+
+For a paired M2 comparison, run every mode with the same seed range (for example `--seeds 8 --seed 1`). The same seed reproduces cue patterns, connectivity, cue order, and noise across modes; only the learning rule and homeostasis condition differ.
 
 Run several seeds and emit JSONL:
 
