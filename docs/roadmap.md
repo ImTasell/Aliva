@@ -181,99 +181,100 @@ Keep a portable scalar implementation as the correctness reference.
 
 ---
 
-## Parallel branch plan
+## Parallel development plan (one extra agent)
 
-Coding agents can work in parallel when file ownership is explicit. The following tasks are designed to minimize merge conflicts and avoid several agents independently changing the simulation core.
+There is currently one additional coding agent available. Do not split the work into three concurrent workers. Use one isolated feature branch plus one integration owner.
 
-### Agent A — associative benchmark
+### Extra Agent — associative-learning experiment harness
 
 **Branch:** feat/association-benchmark  
-**Priority:** Start now.
+**Priority:** Start now. This is the best independent task because it can exercise the existing public Brain API without changing the neural core.
 
-**Owns:**
+**Owns these paths:**
 - experiments/association/**
 - tests/test_association.cpp
-- CMakeLists.txt (this agent is the only parallel agent allowed to edit it for this milestone)
+- CMakeLists.txt (only this agent may edit CMakeLists.txt during this task)
 
-**Build:**
-- Two-cue/two-response environment and seeded trial schedule.
-- Input encoding and output decoding.
-- Training/evaluation separation.
-- Fixed, reward-STDP, and shuffled-reward experiment modes using the existing public Brain API.
-- CSV or JSONL result output and a concise sample result document.
+**Deliver:**
+- A seeded two-cue/two-response associative conditioning task.
+- A clear trial lifecycle: cue presentation, network response, reward/feedback, and evaluation.
+- Input encoding and deterministic output decoding using the current Brain API.
+- Experimental modes for fixed weights, reward-modulated STDP, and shuffled/uninformative reward.
+- Training/evaluation separation. Evaluation must not update weights.
+- CSV or JSONL results with seed, parameters, trial index, cue, selected response, reward, and correctness.
+- Metrics for acquisition, held-out accuracy, reversal learning, retention, spike counts, and network size.
+- A short docs/association-experiment.md explaining the task, assumptions, command line, and how to interpret results.
+- Unit/integration tests for the harness.
 
-**Must not edit:**
-- include/aliva/**
-- src/brain.cpp, src/neuron.cpp
-- tests/test_brain.cpp
-- README.md
-
-If an API limitation is discovered, document the needed interface change and ask the integration owner rather than changing core files on this branch.
-
-### Agent B — FlyWire / mushroom-body data preparation
-
-**Branch:** research/mushroom-body-subgraph
-
-**Owns:**
-- docs/connectome-import.md
-- data/connectome/README.md
-- data/connectome/manifest.example.json
-- optional small extraction scripts under tools/connectome/**
-
-**Build:**
-- Compare relevant FlyWire dataset versions and choose a small mushroom-body region/subgraph.
-- Document exact source/version, file formats, attribution, cell-type labels, edge filtering, and uncertain annotations.
-- Define a proposed import schema and a reproducible small-subgraph extraction path.
-- Do not commit a huge connectome dump or change the runtime's core graph representation.
-
-### Agent C — independent plasticity audit
-
-**Branch:** audit/stdp-validation
-
-**Owns:**
-- docs/reviews/stdp-audit.md
-- optional standalone mathematical notes/examples under experiments/plasticity-review/**
-
-**Build:**
-- Independently review connect_plastic(), trace updates, eligibility decay, reward application, weight clipping, and polarity behavior.
-- Verify the intended update rule with small hand-worked timing examples.
-- Identify missing edge cases and propose tests/parameter sweeps.
-- Report potential correctness or scientific-modeling issues with file/line references.
-
-**Must not edit production implementation files.** Findings should be reviewed before a separate implementation branch is opened.
-
-### Integration owner
-
-**Owns:**
+**Do not edit:**
 - include/aliva/**
 - src/**
 - tests/test_brain.cpp
 - docs/architecture.md
+- docs/research.md
+- README.md
+
+Use only the current public API. If a capability is missing, document the exact gap and ask the integration owner rather than changing production core files. Do not hardcode the correct cue-to-response mapping into neural weights; only the environment's reward rule may know the correct response.
+
+**Expected commands before requesting review:**
+~~~sh
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+cmake --build build --parallel
+ctest --test-dir build --output-on-failure
+./build/aliva_association --help
+~~~
+
+If the CLI target name differs, document the actual command.
+
+### Integration owner — neural core and review
+
+The integration owner (project owner, with ChatGPT assisting) owns:
+- include/aliva/**
+- src/**
+- tests/test_brain.cpp
+- docs/architecture.md
+- docs/research.md
 - final decisions on public API changes and merge order.
 
-The integration owner reviews the experiment API needs and the plasticity audit, then makes any core changes in one focused branch.
+Responsibilities:
+- Keep the core stable while the experiment harness is developed.
+- Independently review the learning-rule math and edge cases.
+- Review the experiment design for leakage, invalid baselines, deterministic seeds, and honest reporting.
+- Make any required API/core changes in a separate focused branch after seeing the agent's findings.
+- Merge only after CI and task-level results are inspected.
+
+### Deferred work (do not launch yet)
+
+The following are good future agent tasks, but should wait until the associative benchmark is merged and understood:
+
+- **FlyWire/mushroom-body research:** select and document a small dataset subgraph, cell types, provenance, edge filtering, and import format.
+- **Independent STDP audit:** review trace timing, eligibility, reward semantics, stability, and sensitivity.
+- **Structural plasticity:** propose bounded growth, rewiring, pruning, and homeostasis after fixed-topology learning is validated.
+
+This avoids spending the only parallel slot on research that does not advance the immediate experiment, and prevents multiple agents from editing the same simulation core.
 
 ---
 
-## Branch and PR rules for every coding agent
+## Branch and PR rules
 
-1. Start from the latest main, use one named branch per task, and never commit directly to main.
+1. Start from the latest main and use feat/association-benchmark. Never commit directly to main.
 2. Read docs/architecture.md, docs/research.md, and this roadmap before changing anything.
-3. Respect the file ownership lists above. If a task needs another agent's files, stop and report the dependency instead of editing them.
-4. Keep each PR focused. No unrelated refactors, broad formatting, new heavyweight dependencies, or generated data dumps.
-5. Add tests for behavior changes. Run the exact CMake build and CTest commands before opening the PR.
-6. Report: summary, files changed, design decisions, tests run/results, known limitations, and any API changes.
-7. Do not claim a feature is validated because it compiles. Include task-level experiment results where relevant.
-8. No branch should edit README.md; project documentation belongs in docs/.
-9. Merge the associative harness and audit/research work first. Integrate any required core API adjustments after review, then use the harness to establish a fixed-size learning baseline.
-10. Structural growth work must wait until the associative-learning baseline is understood.
+3. Stay within the owned paths above. Report API blockers instead of editing unowned core files.
+4. Keep the branch focused. No unrelated refactors, broad formatting, heavyweight dependencies, or generated datasets.
+5. Add tests for behavior changes and run the exact CMake build and CTest commands before requesting review.
+6. Report summary, files changed, design decisions, tests/results, known limitations, and any API changes.
+7. Compilation is not proof of learning. Include task-level results across multiple fixed seeds.
+8. Do not edit README.md; project documentation belongs in docs/.
+9. Do not begin automatic neuron growth until the fixed-topology learning baseline has been evaluated.
+10. The integration owner reviews and merges the feature branch through a pull request; no direct push to main.
 
-## Recommended merge order
+## Recommended near-term sequence
 
-1. audit/stdp-validation review (documentation-only; merge when reviewed).
-2. research/mushroom-body-subgraph (documentation/tooling; merge independently).
-3. feat/association-benchmark (code + CMake + tests; run CI).
-4. A focused core branch for any learning-rule fixes identified by the audit or benchmark integration.
-5. Only after M1 is reproducible: open structural-plasticity implementation work.
+1. Extra agent builds feat/association-benchmark in isolation.
+2. Integration owner reviews experiment validity and audits the current STDP implementation.
+3. Fix any simulator API or learning-rule issues in a separate core branch.
+4. Merge the benchmark and run fixed-weight versus learning-enabled experiments across multiple seeds.
+5. Document results and determine whether reward-modulated STDP actually learns the task.
+6. Only then open FlyWire-import and structural-plasticity work.
 
-Parallelism should increase throughput, not produce competing versions of the brain core. Keep one owner for core semantics and merge experimental modules through explicit APIs.
+Parallel development should reduce elapsed work without creating competing versions of Aliva's neural core.
