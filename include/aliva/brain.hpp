@@ -30,6 +30,7 @@ struct Synapse {
     double weight_mV{};
     double eligibility{};
     bool plastic{false};
+    bool reward_modulated{false};
     int polarity{1};
     bool eligibility_active{false};
 };
@@ -51,9 +52,12 @@ public:
     // Fixed synapse: its weight never changes.
     void connect(NeuronId source, NeuronId target, double weight_mV);
 
-    // Plastic synapse: weight changes only when a finite, non-zero reward
-    // signal is supplied to step() while this synapse has an eligibility trace.
+    // Unmodulated pair-based STDP: timing changes the weight directly.
     // Initial weight must be non-zero so its excitatory/inhibitory polarity is known.
+    void connect_stdp(NeuronId source, NeuronId target, double weight_mV);
+
+    // Reward-modulated STDP: timing creates an eligibility trace, and a later
+    // reward signal converts that trace into a weight change.
     void connect_plastic(NeuronId source, NeuronId target, double weight_mV);
 
     // Pass either no currents (all zero) or one current per neuron.
@@ -78,7 +82,13 @@ private:
         std::size_t index{};
     };
 
-    void connect_impl(NeuronId source, NeuronId target, double weight_mV, bool plastic);
+    void connect_impl(
+        NeuronId source,
+        NeuronId target,
+        double weight_mV,
+        bool plastic,
+        bool reward_modulated
+    );
     void add_eligibility(const SynapseRef& ref, double delta);
 
     PlasticityParameters plasticity_;
