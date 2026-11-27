@@ -100,6 +100,7 @@ private:
     Config config_;
     std::uint64_t seed_;
     std::mt19937_64 rng_;
+    std::mt19937_64 reward_rng_;
     PlasticityParameters plasticity_;
     Brain brain_;
     CuePatterns patterns_;
