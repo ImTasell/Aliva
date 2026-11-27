@@ -10,7 +10,10 @@ The first milestone is deliberately modest: a small C++ neural simulation core. 
 - Sparse, outgoing synapse lists.
 - Synchronous simulation steps with one-step synaptic event delivery.
 - Runtime creation of neurons and synapses.
-- Input validation and a dependency-free test suite.
+- Fixed synapses and opt-in plastic synapses.
+- Pair-based STDP eligibility traces with delayed reward modulation.
+- Fixed excitatory/inhibitory polarity and bounded synaptic weight magnitude.
+- Dependency-free test suite.
 
 ## Build
 
@@ -22,7 +25,7 @@ cmake --build build --parallel
 ctest --test-dir build --output-on-failure
 ~~~
 
-Run the small propagation demo:
+Run the reward-modulated STDP demonstration:
 
 ~~~sh
 ./build/aliva
@@ -33,11 +36,11 @@ Run the small propagation demo:
 Aliva is being developed in layers:
 
 1. **Neural dynamics:** neurons, membrane state, spikes, synapses, and deterministic simulation.
-2. **Plasticity:** learning rules that adjust synaptic strengths from activity and feedback.
-3. **Structural development:** controlled neuron creation, synapse formation, and pruning.
-4. **Memory and tasks:** persistent state and measurable learning environments.
-5. **Language experiments:** symbol/sequence learning and, later, text generation.
+2. **Synaptic learning:** timing-dependent eligibility and reward-modulated weight updates.
+3. **Associative memory:** small mushroom-body-inspired learning experiments.
+4. **Structural development:** controlled neuron creation, connection rewiring, and pruning.
+5. **Memory and language experiments:** persistent learned state, symbol/sequence learning, and eventually text generation.
 
 The order matters. We will evaluate each layer independently instead of assuming that adding neurons automatically creates intelligence.
 
-See the architecture notes in docs/architecture.md for the initial model and its constraints.
+See [docs/architecture.md](docs/architecture.md) for the implementation model and [docs/research.md](docs/research.md) for the literature review and experiment plan.
