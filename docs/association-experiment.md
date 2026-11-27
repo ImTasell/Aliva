@@ -97,10 +97,12 @@ rule differ.
 | Mode | Hidden→output synapses | Reward signal |
 |---|---|---|
 | `fixed` | fixed (`connect`) | logged (correct/incorrect) but cannot change weights |
+| `stdp` | ordinary STDP (`connect_stdp`) | none; timing updates weights directly |
 | `reward` | plastic (`connect_plastic`) | `+1` if the decoded response is correct, `−1` otherwise |
+| `reward-homeostasis` | reward-modulated STDP + intrinsic-bias homeostasis | task reward; homeostasis active during training only |
 | `shuffled` | plastic (`connect_plastic`) | exactly-balanced, seeded-shuffled `±1`, independent of the response |
 
-Ordinary, unmodulated STDP (`connect_stdp`) is not included in this M1 harness; it is reserved for the M2 learning-rule comparison and must not be conflated with reward-modulated STDP.
+Ordinary STDP is now available as an M2 comparison condition. It receives no task reward; the experiment pauses all synaptic learning during held-out evaluation so evaluation cannot change its weights. Homeostasis is likewise paused during evaluation and retention.
 
 The **shuffled** control keeps the reward statistics of the learning condition
 (half `+1`, half `−1`) but destroys the contingency, testing whether improvement
