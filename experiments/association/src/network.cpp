@@ -19,7 +19,7 @@ NetworkHandles build_network(
     Brain& brain,
     const NetworkConfig& config,
     const CuePatterns& patterns,
-    bool plastic_output,
+    Mode mode,
     std::mt19937_64& rng)
 {
     if (config.num_input < 2) {
@@ -90,10 +90,18 @@ NetworkHandles build_network(
     for (const NeuronId hidden : handles.hidden) {
         const NeuronId output = handles.output[static_cast<std::size_t>(channel_choice(rng))];
         const double weight = config.hidden_to_output_weight_mV * weight_scale(rng);
-        if (plastic_output) {
-            brain.connect_plastic(hidden, output, weight);
-        } else {
-            brain.connect(hidden, output, weight);
+        switch (mode) {
+            case Mode::Fixed:
+                brain.connect(hidden, output, weight);
+                break;
+            case Mode::OrdinarySTDP:
+                brain.connect_stdp(hidden, output, weight);
+                break;
+            case Mode::RewardSTDP:
+            case Mode::RewardSTDPHomeostasis:
+            case Mode::ShuffledReward:
+                brain.connect_plastic(hidden, output, weight);
+                break;
         }
     }
 
