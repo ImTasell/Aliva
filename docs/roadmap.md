@@ -27,6 +27,7 @@ Aliva is **not currently a copied fly brain, a language model, or evidence of ar
 - Pair-based pre/post timing traces, decaying eligibility traces, and signed reward modulation.
 - Bounded synaptic weight magnitudes and fixed excitatory/inhibitory polarity.
 - Optional per-neuron firing-rate estimates and bounded homeostatic intrinsic-bias regulation.
+- Runtime controls to pause synaptic learning and homeostatic adaptation during held-out evaluation.
 - A small executable demonstration and CI build/test workflow.
 - Research notes in docs/research.md.
 
