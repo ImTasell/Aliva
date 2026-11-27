@@ -34,3 +34,23 @@ Eight seeds are still a screening sample. Do not promote these values to biologi
 The **Aliva homeostasis bias-cap sweep** workflow holds the promising target and adaptation rate fixed (5 Hz and 0.005) and tests maximum bias caps of 0.05, 0.10, 0.15, and 0.25 mV/ms over paired seeds. This should reveal whether the reversal benefit survives with less bias saturation.
 
 The workflow uploads raw trial records and an aggregate CSV as `aliva-homeostasis-bias-cap-sweep`.
+
+
+## Bias-cap follow-up
+
+**Run:** [GitHub Actions bias-cap sweep #45937185855](https://github.com/ImTasell/Aliva/actions/runs/45937185855)  
+**Artifact:** `aliva-homeostasis-bias-cap-sweep`  
+**Fixed settings:** target 5 Hz, adaptation 0.005 mV/ms per Hz-second, rate-estimator tau 1000 ms; eight paired seeds.
+
+| Maximum bias | Held-out | Retention | Reversal | Mean firing | Mean absolute bias |
+|---:|---:|---:|---:|---:|---:|
+| 0.05 mV/ms | 0.916 ± 0.179 | 0.909 ± 0.183 | 0.750 ± 0.220 | 24.88 Hz | 0.050 |
+| 0.10 mV/ms | 0.938 ± 0.131 | 0.928 ± 0.152 | 0.813 ± 0.235 | 24.09 Hz | 0.100 |
+| 0.15 mV/ms | 0.906 ± 0.178 | 0.909 ± 0.174 | 0.988 ± 0.035 | 23.26 Hz | 0.146 |
+| 0.25 mV/ms | **0.991 ± 0.027** | **0.991 ± 0.019** | **1.000 ± 0.000** | 21.83 Hz | 0.235 |
+
+The 0.25 mV/ms cap was best across the measured task metrics in this eight-seed screen. The 0.15 cap is a useful lower-activity-suppression alternative: it retained 0.988 reversal accuracy but had lower held-out accuracy (0.906). The smaller caps kept mean firing closer to baseline but gave up more reversal performance.
+
+The 0.25 result still has a saturation warning: mean absolute bias (0.235) is 94% of the configured cap on average, while the network mean firing rate (21.83 Hz) remains far above the 5 Hz target. The controller is not demonstrating convergence to the requested target. Treat 0.25 as the best task-specific setting tested so far, not as a validated biological homeostasis setting or a new global default.
+
+Next validation should use at least 32 paired seeds for the 0.15 and 0.25 caps against reward-STDP without homeostasis. Also record the fraction of neurons at the bias limit and firing rates separately for input, hidden, and output populations.
