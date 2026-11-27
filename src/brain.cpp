@@ -1,11 +1,54 @@
 #include "aliva/brain.hpp"
 
+#include <algorithm>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
 #include <utility>
 
 namespace aliva {
+namespace {
+
+constexpr double kEligibilityEpsilon = 1e-12;
+
+void validate_plasticity(const PlasticityParameters& parameters) {
+    const double values[] = {
+        parameters.potentiation,
+        parameters.depression,
+        parameters.pre_trace_tau_ms,
+        parameters.post_trace_tau_ms,
+        parameters.eligibility_tau_ms,
+        parameters.learning_rate_mV,
+        parameters.max_abs_weight_mV
+    };
+    for (const double value : values) {
+        if (!std::isfinite(value)) {
+            throw std::invalid_argument("Plasticity parameters must all be finite.");
+        }
+    }
+
+    if (parameters.potentiation < 0.0 || parameters.depression < 0.0) {
+        throw std::invalid_argument("STDP amplitudes cannot be negative.");
+    }
+    if (parameters.pre_trace_tau_ms <= 0.0 ||
+        parameters.post_trace_tau_ms <= 0.0 ||
+        parameters.eligibility_tau_ms <= 0.0) {
+        throw std::invalid_argument("Plasticity time constants must be positive.");
+    }
+    if (parameters.learning_rate_mV < 0.0) {
+        throw std::invalid_argument("Plasticity learning rate cannot be negative.");
+    }
+    if (parameters.max_abs_weight_mV <= 0.0) {
+        throw std::invalid_argument("Maximum absolute synapse weight must be positive.");
+    }
+}
+
+} // namespace
+
+Brain::Brain(PlasticityParameters plasticity)
+    : plasticity_(plasticity) {
+    validate_plasticity(plasticity_);
+}
 
 NeuronId Brain::add_neuron(NeuronParameters parameters) {
     if (neurons_.size() >= static_cast<std::size_t>(std::numeric_limits<NeuronId>::max())) {
@@ -15,11 +58,28 @@ NeuronId Brain::add_neuron(NeuronParameters parameters) {
     const auto id = static_cast<NeuronId>(neurons_.size());
     neurons_.emplace_back(parameters);
     outgoing_synapses_.emplace_back();
+    incoming_synapses_.emplace_back();
     pending_synaptic_kicks_mV_.push_back(0.0);
+    pre_traces_.push_back(0.0);
+    post_traces_.push_back(0.0);
     return id;
 }
 
 void Brain::connect(NeuronId source, NeuronId target, double weight_mV) {
+    connect_impl(source, target, weight_mV, false);
+}
+
+void Brain::connect_plastic(NeuronId source, NeuronId target, double weight_mV) {
+    if (weight_mV == 0.0) {
+        throw std::invalid_argument("A plastic synapse needs a non-zero initial weight to define its polarity.");
+    }
+    if (std::abs(weight_mV) > plasticity_.max_abs_weight_mV) {
+        throw std::invalid_argument("Initial plastic synapse weight exceeds the configured maximum.");
+    }
+    connect_impl(source, target, weight_mV, true);
+}
+
+void Brain::connect_impl(NeuronId source, NeuronId target, double weight_mV, bool plastic) {
     const auto source_index = static_cast<std::size_t>(source);
     const auto target_index = static_cast<std::size_t>(target);
     if (source_index >= neurons_.size() || target_index >= neurons_.size()) {
@@ -29,16 +89,47 @@ void Brain::connect(NeuronId source, NeuronId target, double weight_mV) {
         throw std::invalid_argument("Synapse weight must be finite.");
     }
 
-    outgoing_synapses_[source_index].push_back(Synapse{target, weight_mV});
+    auto& outgoing = outgoing_synapses_[source_index];
+    const auto edge_index = outgoing.size();
+    const int polarity = weight_mV < 0.0 ? -1 : 1;
+    outgoing.push_back(Synapse{target, weight_mV, 0.0, plastic, polarity, false});
+
+    try {
+        incoming_synapses_[target_index].push_back(
+            SynapseRef{source, edge_index}
+        );
+    } catch (...) {
+        outgoing.pop_back();
+        throw;
+    }
+
     ++synapse_count_;
+}
+
+void Brain::add_eligibility(const SynapseRef& ref, double delta) {
+    auto& synapse = outgoing_synapses_[static_cast<std::size_t>(ref.source)][ref.index];
+    if (!synapse.plastic) {
+        return;
+    }
+
+    synapse.eligibility += delta;
+    if (!synapse.eligibility_active &&
+        std::abs(synapse.eligibility) >= kEligibilityEpsilon) {
+        synapse.eligibility_active = true;
+        active_eligibility_synapses_.push_back(ref);
+    }
 }
 
 StepResult Brain::step(
     double dt_ms,
-    std::span<const double> external_currents_mV_per_ms
+    std::span<const double> external_currents_mV_per_ms,
+    double reward_signal
 ) {
     if (!std::isfinite(dt_ms) || dt_ms <= 0.0) {
         throw std::invalid_argument("Time step must be finite and positive.");
+    }
+    if (!std::isfinite(reward_signal)) {
+        throw std::invalid_argument("Reward signal must be finite.");
     }
     if (!external_currents_mV_per_ms.empty() &&
         external_currents_mV_per_ms.size() != neurons_.size()) {
@@ -51,6 +142,35 @@ StepResult Brain::step(
     }
     if (!std::isfinite(simulation_time_ms_ + dt_ms)) {
         throw std::overflow_error("Simulation time overflow.");
+    }
+
+    const double pre_decay = std::exp(-dt_ms / plasticity_.pre_trace_tau_ms);
+    const double post_decay = std::exp(-dt_ms / plasticity_.post_trace_tau_ms);
+    const double eligibility_decay = std::exp(-dt_ms / plasticity_.eligibility_tau_ms);
+
+    for (double& trace : pre_traces_) {
+        trace *= pre_decay;
+    }
+    for (double& trace : post_traces_) {
+        trace *= post_decay;
+    }
+
+    // Only synapses that currently carry an eligibility trace are visited.
+    // This keeps the plasticity bookkeeping proportional to recent activity
+    // rather than scanning every synapse in the network on every step.
+    for (std::size_t index = 0; index < active_eligibility_synapses_.size();) {
+        const SynapseRef ref = active_eligibility_synapses_[index];
+        auto& synapse = outgoing_synapses_[static_cast<std::size_t>(ref.source)][ref.index];
+        synapse.eligibility *= eligibility_decay;
+
+        if (std::abs(synapse.eligibility) < kEligibilityEpsilon) {
+            synapse.eligibility = 0.0;
+            synapse.eligibility_active = false;
+            active_eligibility_synapses_[index] = active_eligibility_synapses_.back();
+            active_eligibility_synapses_.pop_back();
+        } else {
+            ++index;
+        }
     }
 
     // Deliver spikes from the previous simulation step. This keeps updates
@@ -80,6 +200,60 @@ StepResult Brain::step(
         }
     }
 
+    // Pair-based STDP updates eligibility from traces accumulated before the
+    // current step. Simultaneous pre/post spikes therefore do not get an
+    // artificial ordering advantage.
+    for (const NeuronId source : current_spikes) {
+        const auto& outgoing = outgoing_synapses_[static_cast<std::size_t>(source)];
+        for (std::size_t edge_index = 0; edge_index < outgoing.size(); ++edge_index) {
+            const Synapse& synapse = outgoing[edge_index];
+            if (synapse.plastic) {
+                const double post_trace = post_traces_[static_cast<std::size_t>(synapse.target)];
+                add_eligibility(
+                    SynapseRef{source, edge_index},
+                    -plasticity_.depression * post_trace
+                );
+            }
+        }
+    }
+
+    for (const NeuronId target : current_spikes) {
+        for (const SynapseRef& ref : incoming_synapses_[static_cast<std::size_t>(target)]) {
+            const double pre_trace = pre_traces_[static_cast<std::size_t>(ref.source)];
+            add_eligibility(ref, plasticity_.potentiation * pre_trace);
+        }
+    }
+
+    // A spike contributes to both a neuron's outgoing (pre) and incoming
+    // (post) timing histories, after all pair comparisons for this step.
+    for (const NeuronId id : current_spikes) {
+        const auto index = static_cast<std::size_t>(id);
+        pre_traces_[index] += 1.0;
+        post_traces_[index] += 1.0;
+    }
+
+    // Reward is applied to recent eligible events. Eligibility is retained
+    // (and decays) after reinforcement, allowing multiple modulatory signals
+    // during its lifetime. Weight polarity is fixed by the initial synapse.
+    if (reward_signal != 0.0 && plasticity_.learning_rate_mV != 0.0) {
+        for (const SynapseRef& ref : active_eligibility_synapses_) {
+            auto& synapse = outgoing_synapses_[static_cast<std::size_t>(ref.source)][ref.index];
+            const double delta = plasticity_.learning_rate_mV *
+                reward_signal * synapse.eligibility;
+            if (!std::isfinite(delta)) {
+                throw std::overflow_error("Plasticity weight update overflow.");
+            }
+
+            const double magnitude = std::abs(synapse.weight_mV);
+            const double updated_magnitude = std::clamp(
+                magnitude + delta,
+                0.0,
+                plasticity_.max_abs_weight_mV
+            );
+            synapse.weight_mV = static_cast<double>(synapse.polarity) * updated_magnitude;
+        }
+    }
+
     last_spikes_ = current_spikes;
     ++step_;
     simulation_time_ms_ += dt_ms;
@@ -105,6 +279,14 @@ const Neuron& Brain::neuron(NeuronId id) const {
         throw std::out_of_range("Neuron ID does not exist.");
     }
     return neurons_[index];
+}
+
+std::span<const Synapse> Brain::synapses_from(NeuronId source) const {
+    const auto index = static_cast<std::size_t>(source);
+    if (index >= outgoing_synapses_.size()) {
+        throw std::out_of_range("Neuron ID does not exist.");
+    }
+    return outgoing_synapses_[index];
 }
 
 const std::vector<NeuronId>& Brain::last_spikes() const noexcept {
