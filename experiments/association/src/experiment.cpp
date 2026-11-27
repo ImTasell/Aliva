@@ -12,6 +12,7 @@ namespace aliva::assoc {
 namespace {
 
 constexpr double kInputCurrent_mV_per_ms = 3.0;
+constexpr std::uint64_t kRewardRngSalt = 0x9E3779B97F4A7C15ULL;
 
 // Validate before any dependent members are initialized.
 Config validated_config(Config config) {
@@ -73,6 +74,7 @@ Experiment::Experiment(Config config, std::uint64_t seed)
     : config_(validated_config(std::move(config))),
       seed_(seed),
       rng_(seed),
+      reward_rng_(seed ^ kRewardRngSalt),
       plasticity_(config_.plasticity),
       brain_(plasticity_, homeostasis_for_mode(config_)),
       patterns_(make_cue_patterns(
@@ -222,7 +224,7 @@ void Experiment::run_phase(
             shuffled_rewards_.push_back((i % 2 == 0) ? config_.task.reward_correct
                                                     : config_.task.reward_incorrect);
         }
-        std::shuffle(shuffled_rewards_.begin(), shuffled_rewards_.end(), rng_);
+        std::shuffle(shuffled_rewards_.begin(), shuffled_rewards_.end(), reward_rng_);
         shuffled_cursor_ = 0;
     }
 
