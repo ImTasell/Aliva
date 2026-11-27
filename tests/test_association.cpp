@@ -224,6 +224,34 @@ void same_seed_reproduces_the_run() {
             "Same seed must reproduce the final weights.");
 }
 
+void paired_seed_preserves_cue_schedule_across_modes() {
+    Config reward_config;
+    reward_config.mode = Mode::RewardSTDP;
+    Config shuffled_config = reward_config;
+    shuffled_config.mode = Mode::ShuffledReward;
+    Config ordinary_config = reward_config;
+    ordinary_config.mode = Mode::OrdinarySTDP;
+
+    Experiment reward(reward_config, 1234);
+    Experiment shuffled(shuffled_config, 1234);
+    Experiment ordinary(ordinary_config, 1234);
+    reward.run();
+    shuffled.run();
+    ordinary.run();
+
+    const auto& expected = reward.records();
+    const auto& shuffled_records = shuffled.records();
+    const auto& ordinary_records = ordinary.records();
+    require(expected.size() == shuffled_records.size() &&
+                expected.size() == ordinary_records.size(),
+            "Paired modes must have identical trial counts.");
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        require(expected[i].cue == shuffled_records[i].cue &&
+                    expected[i].cue == ordinary_records[i].cue,
+                "The same seed must preserve the cue schedule across learning modes.");
+    }
+}
+
 void different_seed_changes_the_run() {
     Config config;
     config.mode = Mode::RewardSTDP;
@@ -408,6 +436,7 @@ int main() {
         {"reward homeostasis mode is explicit", reward_homeostasis_mode_is_explicit},
         {"evaluation phases supply zero reward", evaluation_phases_supply_zero_reward},
         {"same seed reproduces the run", same_seed_reproduces_the_run},
+        {"paired seeds preserve cue schedule across modes", paired_seed_preserves_cue_schedule_across_modes},
         {"different seed changes the run", different_seed_changes_the_run},
         {"reward mode learns the association", reward_mode_learns_the_association},
         {"fixed and shuffled controls do not learn", fixed_and_shuffled_controls_do_not_learn},
