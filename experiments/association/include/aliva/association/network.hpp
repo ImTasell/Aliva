@@ -41,7 +41,7 @@ struct NetworkHandles {
     Brain& brain,
     const NetworkConfig& config,
     const CuePatterns& patterns,
-    bool plastic_output,
+    Mode mode,
     std::mt19937_64& rng);
 
 } // namespace aliva::assoc

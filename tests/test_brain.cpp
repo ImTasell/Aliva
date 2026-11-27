@@ -212,6 +212,30 @@ void unmodulated_stdp_potentiates_without_reward() {
             "Pre-before-post pairing should potentiate an ordinary STDP synapse without reward.");
 }
 
+void disabled_learning_freezes_ordinary_stdp_weights() {
+    aliva::Brain brain(fast_plasticity());
+    const auto source = brain.add_neuron(fast_spiking_neuron());
+    const auto target = brain.add_neuron(fast_spiking_neuron());
+    brain.connect_stdp(source, target, 18.0);
+    brain.set_learning_enabled(false);
+
+    const std::array<double, 2> drive_source{20.0, 0.0};
+    const std::array<double, 2> no_drive{0.0, 0.0};
+    (void)brain.step(1.0, drive_source);
+    (void)brain.step(1.0, no_drive);
+    require(std::abs(brain.synapses_from(source).front().weight_mV - 18.0) < 1e-12,
+            "Disabled learning must freeze ordinary STDP weights during evaluation.");
+
+    for (int tick = 0; tick < 15; ++tick) {
+        (void)brain.step(1.0, no_drive);
+    }
+    brain.set_learning_enabled(true);
+    (void)brain.step(1.0, drive_source);
+    (void)brain.step(1.0, no_drive);
+    require(brain.synapses_from(source).front().weight_mV > 18.0,
+            "Re-enabling learning must resume ordinary STDP updates.");
+}
+
 void unmodulated_stdp_depresses_post_before_pre() {
     aliva::Brain brain(fast_plasticity());
     const auto source = brain.add_neuron(fast_spiking_neuron());
@@ -395,6 +419,30 @@ void homeostasis_increases_bias_for_underactive_neurons() {
             "Positive homeostatic bias must respect its configured bound.");
 }
 
+void homeostasis_can_be_paused_during_evaluation() {
+    aliva::HomeostasisParameters homeostasis;
+    homeostasis.enabled = true;
+    homeostasis.target_firing_rate_hz = 10.0;
+    homeostasis.rate_time_constant_ms = 500.0;
+    homeostasis.adaptation_rate_mV_per_ms_per_hz_second = 1.0;
+    homeostasis.max_abs_bias_current_mV_per_ms = 0.5;
+
+    aliva::Brain brain({}, homeostasis);
+    const auto neuron = brain.add_neuron();
+    const std::array<double, 1> no_drive{0.0};
+    brain.set_homeostasis_enabled(false);
+    for (int tick = 0; tick < 100; ++tick) {
+        (void)brain.step(1.0, no_drive);
+    }
+    require(brain.homeostatic_bias_current_mV_per_ms(neuron) == 0.0,
+            "Paused homeostasis must not adapt intrinsic bias during evaluation.");
+
+    brain.set_homeostasis_enabled(true);
+    (void)brain.step(1.0, no_drive);
+    require(brain.homeostatic_bias_current_mV_per_ms(neuron) > 0.0,
+            "Re-enabled homeostasis must resume intrinsic-bias adaptation.");
+}
+
 void invalid_homeostasis_configuration_is_rejected() {
     aliva::HomeostasisParameters parameters;
     parameters.enabled = true;
@@ -440,11 +488,13 @@ int main() {
         {"eligibility expires without reinforcement", eligibility_expires_without_reinforcement},
         {"ordinary STDP potentiates without reward", unmodulated_stdp_potentiates_without_reward},
         {"ordinary STDP depresses without reward", unmodulated_stdp_depresses_post_before_pre},
+        {"disabled learning freezes ordinary STDP", disabled_learning_freezes_ordinary_stdp_weights},
         {"fixed synapses remain fixed", fixed_synapses_do_not_learn},
         {"inhibitory polarity is preserved", plastic_inhibitory_synapse_keeps_its_polarity},
         {"disabled homeostasis preserves old behavior", disabled_homeostasis_preserves_original_simulation},
         {"homeostasis reduces overactive neuron bias", homeostasis_reduces_bias_for_overactive_neurons},
         {"homeostasis increases underactive neuron bias", homeostasis_increases_bias_for_underactive_neurons},
+        {"homeostasis can be paused during evaluation", homeostasis_can_be_paused_during_evaluation},
         {"invalid homeostasis settings are rejected", invalid_homeostasis_configuration_is_rejected},
         {"invalid plasticity settings are rejected", invalid_plasticity_configuration_is_rejected},
     };

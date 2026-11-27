@@ -91,16 +91,18 @@ limit and lose the drive difference that learning must act on.
 ## 3. Experimental modes
 
 `--mode` selects the condition. Topology and initial weights are identical
-across modes for a given seed; only the hidden→output synapses and the reward
-rule differ.
+across modes for a given seed; the learning rule and optional homeostatic
+controller are the experimental variables.
 
 | Mode | Hidden→output synapses | Reward signal |
 |---|---|---|
 | `fixed` | fixed (`connect`) | logged (correct/incorrect) but cannot change weights |
+| `stdp` | ordinary STDP (`connect_stdp`) | none; timing updates weights directly |
 | `reward` | plastic (`connect_plastic`) | `+1` if the decoded response is correct, `−1` otherwise |
+| `reward-homeostasis` | reward-modulated STDP + intrinsic-bias homeostasis | task reward; homeostasis active during training only |
 | `shuffled` | plastic (`connect_plastic`) | exactly-balanced, seeded-shuffled `±1`, independent of the response |
 
-Ordinary, unmodulated STDP (`connect_stdp`) is not included in this M1 harness; it is reserved for the M2 learning-rule comparison and must not be conflated with reward-modulated STDP.
+Ordinary STDP is now available as an M2 comparison condition. It receives no task reward; the experiment pauses all synaptic learning during held-out evaluation so evaluation cannot change its weights. Homeostasis is likewise paused during evaluation and retention.
 
 The **shuffled** control keeps the reward statistics of the learning condition
 (half `+1`, half `−1`) but destroys the contingency, testing whether improvement
@@ -108,10 +110,11 @@ depends on *meaningful* feedback.
 
 ### Training vs. evaluation separation
 
-Evaluation phases (`eval`, `retention`, `reversal_eval`) always pass
-`reward = 0.0` to `Brain::step`. Because the core only updates weights when the
-reward is non-zero, evaluation provably cannot change weights. This is asserted
-by a unit test.
+Evaluation phases (`eval`, `retention`, `reversal_eval`) pass `reward = 0.0`
+and explicitly disable synaptic learning. This pauses both direct ordinary-STDP
+updates and reward-modulated weight updates, so held-out evaluation cannot change
+synaptic weights. Homeostatic bias adaptation is also paused during evaluation
+and retention; firing-rate telemetry continues updating.
 
 ---
 
@@ -144,7 +147,7 @@ Per-trial records (§7) plus an aggregate summary:
 - `trials_to_threshold` — training trials to first reach `accuracy_threshold`.
 - `reversal_episode_accuracy`, `reversal_eval_accuracy` — adaptation after swap.
 - `retention_accuracy` — accuracy after the no-training interval.
-- `total_spikes`, `mean_firing_rate_hz`, `neuron_count`, `synapse_count`.
+- `total_spikes`, `mean_firing_rate_hz`, `mean_abs_homeostatic_bias_mV_per_ms`, `neuron_count`, `synapse_count`.
 - `output_weights` — min/max/mean/mean-abs of the hidden→output weights.
 
 ---
@@ -164,9 +167,13 @@ Run the three conditions for one seed:
 
 ```sh
 ./build/aliva_association --mode reward   --seed 1 --out /tmp/reward
+./build/aliva_association --mode stdp     --seed 1 --out /tmp/stdp
+./build/aliva_association --mode reward-homeostasis --seed 1 --out /tmp/reward-homeostasis
 ./build/aliva_association --mode fixed    --seed 1 --out /tmp/fixed
 ./build/aliva_association --mode shuffled --seed 1 --out /tmp/shuffled
 ```
+
+For a paired M2 comparison, run every mode with the same seed range (for example `--seeds 8 --seed 1`). The same seed reproduces cue patterns, connectivity, cue order, and noise across modes. Shuffled reward uses a separate RNG stream so its control bookkeeping cannot perturb the shared task randomness.
 
 Run several seeds and emit JSONL:
 

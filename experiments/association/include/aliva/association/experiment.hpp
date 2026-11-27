@@ -61,6 +61,7 @@ struct Summary {
     std::size_t total_trials{0};
     std::size_t total_spikes{0};
     double mean_firing_rate_hz{0.0};
+    double mean_abs_homeostatic_bias_mV_per_ms{0.0};
     std::size_t neuron_count{0};
     std::size_t synapse_count{0};
     WeightStats output_weights;
@@ -99,6 +100,7 @@ private:
     Config config_;
     std::uint64_t seed_;
     std::mt19937_64 rng_;
+    std::mt19937_64 reward_rng_;
     PlasticityParameters plasticity_;
     Brain brain_;
     CuePatterns patterns_;

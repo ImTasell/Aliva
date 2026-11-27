@@ -75,7 +75,8 @@ void validate_homeostasis(const HomeostasisParameters& parameters) {
 
 Brain::Brain(PlasticityParameters plasticity, HomeostasisParameters homeostasis)
     : plasticity_(plasticity),
-      homeostasis_(homeostasis) {
+      homeostasis_(homeostasis),
+      homeostasis_active_(homeostasis.enabled) {
     validate_plasticity(plasticity_);
     validate_homeostasis(homeostasis_);
 }
@@ -95,6 +96,14 @@ NeuronId Brain::add_neuron(NeuronParameters parameters) {
     firing_rate_estimates_hz_.push_back(0.0);
     homeostatic_bias_currents_mV_per_ms_.push_back(0.0);
     return id;
+}
+
+void Brain::set_learning_enabled(bool enabled) noexcept {
+    learning_enabled_ = enabled;
+}
+
+void Brain::set_homeostasis_enabled(bool enabled) noexcept {
+    homeostasis_active_ = enabled && homeostasis_.enabled;
 }
 
 void Brain::connect(NeuronId source, NeuronId target, double weight_mV) {
@@ -272,7 +281,7 @@ StepResult Brain::step(
         const double external_current = external_currents_mV_per_ms.empty()
             ? 0.0
             : external_currents_mV_per_ms[index];
-        const double homeostatic_bias = homeostasis_.enabled
+        const double homeostatic_bias = homeostasis_active_
             ? homeostatic_bias_currents_mV_per_ms_[index]
             : 0.0;
         const double effective_current = external_current + homeostatic_bias;
@@ -300,7 +309,7 @@ StepResult Brain::step(
             throw std::overflow_error("Firing-rate estimate overflow.");
         }
 
-        if (homeostasis_.enabled) {
+        if (homeostasis_active_) {
             const double rate_error = homeostasis_.target_firing_rate_hz - rate_estimate;
             const double bias_delta =
                 homeostasis_.adaptation_rate_mV_per_ms_per_hz_second *
@@ -318,42 +327,46 @@ StepResult Brain::step(
         }
     }
 
-    // Pair-based STDP updates eligibility from traces accumulated before the
-    // current step. Simultaneous pre/post spikes therefore do not get an
-    // artificial ordering advantage.
-    for (const NeuronId source : current_spikes) {
-        const auto& outgoing = outgoing_synapses_[static_cast<std::size_t>(source)];
-        for (std::size_t edge_index = 0; edge_index < outgoing.size(); ++edge_index) {
-            const Synapse& synapse = outgoing[edge_index];
-            if (synapse.plastic) {
-                const double post_trace = post_traces_[static_cast<std::size_t>(synapse.target)];
-                add_eligibility(
-                    SynapseRef{source, edge_index},
-                    -plasticity_.depression * post_trace
-                );
+    if (learning_enabled_) {
+        // Pair-based STDP updates eligibility from traces accumulated before the
+        // current step. Simultaneous pre/post spikes therefore do not get an
+        // artificial ordering advantage.
+        for (const NeuronId source : current_spikes) {
+            const auto& outgoing = outgoing_synapses_[static_cast<std::size_t>(source)];
+            for (std::size_t edge_index = 0; edge_index < outgoing.size(); ++edge_index) {
+                const Synapse& synapse = outgoing[edge_index];
+                if (synapse.plastic) {
+                    const double post_trace = post_traces_[static_cast<std::size_t>(synapse.target)];
+                    add_eligibility(
+                        SynapseRef{source, edge_index},
+                        -plasticity_.depression * post_trace
+                    );
+                }
             }
         }
-    }
-
-    for (const NeuronId target : current_spikes) {
-        for (const SynapseRef& ref : incoming_synapses_[static_cast<std::size_t>(target)]) {
-            const double pre_trace = pre_traces_[static_cast<std::size_t>(ref.source)];
-            add_eligibility(ref, plasticity_.potentiation * pre_trace);
+    
+        for (const NeuronId target : current_spikes) {
+            for (const SynapseRef& ref : incoming_synapses_[static_cast<std::size_t>(target)]) {
+                const double pre_trace = pre_traces_[static_cast<std::size_t>(ref.source)];
+                add_eligibility(ref, plasticity_.potentiation * pre_trace);
+            }
         }
-    }
-
-    // A spike contributes to both a neuron's outgoing (pre) and incoming
-    // (post) timing histories, after all pair comparisons for this step.
-    for (const NeuronId id : current_spikes) {
-        const auto index = static_cast<std::size_t>(id);
-        pre_traces_[index] += 1.0;
-        post_traces_[index] += 1.0;
+    
+        // A spike contributes to both a neuron's outgoing (pre) and incoming
+        // (post) timing histories, after all pair comparisons for this step.
+        for (const NeuronId id : current_spikes) {
+            const auto index = static_cast<std::size_t>(id);
+            pre_traces_[index] += 1.0;
+            post_traces_[index] += 1.0;
+        }
+    
+    
     }
 
     // Reward is applied to recent eligible events. Eligibility is retained
     // (and decays) after reinforcement, allowing multiple modulatory signals
     // during its lifetime. Weight polarity is fixed by the initial synapse.
-    if (reward_signal != 0.0 && plasticity_.learning_rate_mV != 0.0) {
+    if (learning_enabled_ && reward_signal != 0.0 && plasticity_.learning_rate_mV != 0.0) {
         for (const SynapseRef& ref : active_eligibility_synapses_) {
             auto& synapse = outgoing_synapses_[static_cast<std::size_t>(ref.source)][ref.index];
             const double delta = plasticity_.learning_rate_mV *

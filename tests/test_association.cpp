@@ -118,7 +118,7 @@ void network_size_matches_configuration() {
     std::mt19937_64 rng{7};
     aliva::Brain brain;
     const NetworkHandles handles =
-        build_network(brain, config.network, make_cue_patterns(12, 3, 3.0, rng), true, rng);
+        build_network(brain, config.network, make_cue_patterns(12, 3, 3.0, rng), Mode::RewardSTDP, rng);
 
     require(brain.neuron_count() == 12 + 40 + 2,
             "Neuron count must equal input + hidden + output.");
@@ -159,6 +159,34 @@ void reward_mode_changes_weights() {
     require(before != after, "Reward-modulated STDP must change weights during training.");
 }
 
+void ordinary_stdp_mode_changes_weights_without_reward() {
+    Config config;
+    config.mode = Mode::OrdinarySTDP;
+    Experiment experiment(config, 1);
+    const auto before = experiment.hidden_to_output_weights();
+    experiment.run();
+    const auto after = experiment.hidden_to_output_weights();
+    require(before != after,
+            "Ordinary STDP must modify weights from spike timing without task reward.");
+    for (const TrialRecord& record : experiment.records()) {
+        require(record.reward == 0.0,
+                "Ordinary STDP must not receive task reward or a modulatory signal.");
+    }
+}
+
+void reward_homeostasis_mode_is_explicit() {
+    Config config;
+    config.mode = Mode::RewardSTDPHomeostasis;
+    Experiment experiment(config, 1);
+    require(experiment.config().mode == Mode::RewardSTDPHomeostasis,
+            "Homeostatic reward mode must remain explicit in experiment metadata.");
+    experiment.run();
+    require(experiment.summary().mean_firing_rate_hz >= 0.0,
+            "Homeostatic experiment must report a finite non-negative firing rate.");
+    require(experiment.summary().mean_abs_homeostatic_bias_mV_per_ms > 0.0,
+            "Homeostasis mode must actually adapt intrinsic bias during training.");
+}
+
 void evaluation_phases_supply_zero_reward() {
     Config config;
     config.mode = Mode::RewardSTDP;
@@ -194,6 +222,34 @@ void same_seed_reproduces_the_run() {
     }
     require(first.hidden_to_output_weights() == second.hidden_to_output_weights(),
             "Same seed must reproduce the final weights.");
+}
+
+void paired_seed_preserves_cue_schedule_across_modes() {
+    Config reward_config;
+    reward_config.mode = Mode::RewardSTDP;
+    Config shuffled_config = reward_config;
+    shuffled_config.mode = Mode::ShuffledReward;
+    Config ordinary_config = reward_config;
+    ordinary_config.mode = Mode::OrdinarySTDP;
+
+    Experiment reward(reward_config, 1234);
+    Experiment shuffled(shuffled_config, 1234);
+    Experiment ordinary(ordinary_config, 1234);
+    reward.run();
+    shuffled.run();
+    ordinary.run();
+
+    const auto& expected = reward.records();
+    const auto& shuffled_records = shuffled.records();
+    const auto& ordinary_records = ordinary.records();
+    require(expected.size() == shuffled_records.size() &&
+                expected.size() == ordinary_records.size(),
+            "Paired modes must have identical trial counts.");
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        require(expected[i].cue == shuffled_records[i].cue &&
+                    expected[i].cue == ordinary_records[i].cue,
+                "The same seed must preserve the cue schedule across learning modes.");
+    }
 }
 
 void different_seed_changes_the_run() {
@@ -376,8 +432,11 @@ int main() {
         {"network size matches configuration", network_size_matches_configuration},
         {"fixed mode never changes weights", fixed_mode_never_changes_weights},
         {"reward mode changes weights", reward_mode_changes_weights},
+        {"ordinary STDP learns without reward", ordinary_stdp_mode_changes_weights_without_reward},
+        {"reward homeostasis mode is explicit", reward_homeostasis_mode_is_explicit},
         {"evaluation phases supply zero reward", evaluation_phases_supply_zero_reward},
         {"same seed reproduces the run", same_seed_reproduces_the_run},
+        {"paired seeds preserve cue schedule across modes", paired_seed_preserves_cue_schedule_across_modes},
         {"different seed changes the run", different_seed_changes_the_run},
         {"reward mode learns the association", reward_mode_learns_the_association},
         {"fixed and shuffled controls do not learn", fixed_and_shuffled_controls_do_not_learn},

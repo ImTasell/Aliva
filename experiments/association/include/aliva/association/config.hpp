@@ -11,12 +11,11 @@ namespace aliva::assoc {
 // Experimental condition for the associative task.
 //
 //  * Fixed          - hidden->output synapses are fixed; no learning.
-//  * RewardSTDP     - hidden->output synapses are plastic and receive the
-//                     task reward (correct/incorrect) as the modulatory signal.
-//  * ShuffledReward - hidden->output synapses are plastic but the modulatory
-//                     signal is an uninformative random +/-1 that is
-//                     independent of the response (control condition).
-enum class Mode { Fixed, RewardSTDP, ShuffledReward };
+//  * OrdinarySTDP - hidden->output synapses learn directly from spike timing.
+//  * RewardSTDP - eligibility is converted into weight change by task reward.
+//  * RewardSTDPHomeostasis - reward-modulated STDP plus intrinsic-bias regulation.
+//  * ShuffledReward - reward-modulated STDP with uninformative random reward.
+enum class Mode { Fixed, OrdinarySTDP, RewardSTDP, RewardSTDPHomeostasis, ShuffledReward };
 
 [[nodiscard]] std::string to_string(Mode mode);
 
@@ -92,6 +91,7 @@ struct Config {
     TimingConfig timing;
     TaskConfig task;
     PlasticityParameters plasticity{default_plasticity()};
+    HomeostasisParameters homeostasis;
     std::uint64_t seed{1};
     std::string label;
 

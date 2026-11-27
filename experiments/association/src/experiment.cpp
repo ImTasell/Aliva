@@ -12,11 +12,18 @@ namespace aliva::assoc {
 namespace {
 
 constexpr double kInputCurrent_mV_per_ms = 3.0;
+constexpr std::uint64_t kRewardRngSalt = 0x9E3779B97F4A7C15ULL;
 
 // Validate before any dependent members are initialized.
 Config validated_config(Config config) {
     config.validate();
     return config;
+}
+
+HomeostasisParameters homeostasis_for_mode(const Config& config) {
+    HomeostasisParameters parameters = config.homeostasis;
+    parameters.enabled = (config.mode == Mode::RewardSTDPHomeostasis);
+    return parameters;
 }
 
 // The environment's knowledge of the correct response. This is the only place
@@ -67,8 +74,9 @@ Experiment::Experiment(Config config, std::uint64_t seed)
     : config_(validated_config(std::move(config))),
       seed_(seed),
       rng_(seed),
+      reward_rng_(seed ^ kRewardRngSalt),
       plasticity_(config_.plasticity),
-      brain_(plasticity_),
+      brain_(plasticity_, homeostasis_for_mode(config_)),
       patterns_(make_cue_patterns(
           config_.network.num_input,
           config_.network.active_inputs_per_cue,
@@ -78,7 +86,7 @@ Experiment::Experiment(Config config, std::uint64_t seed)
           brain_,
           config_.network,
           patterns_,
-          config_.mode != Mode::Fixed,
+          config_.mode,
           rng_)) {
     summary_.mode = config_.mode;
     summary_.seed = seed_;
@@ -156,7 +164,9 @@ TrialRecord Experiment::run_trial(
     // separation at the API level.
     double reward = 0.0;
     if (train) {
-        if (config_.mode == Mode::ShuffledReward) {
+        if (config_.mode == Mode::OrdinarySTDP) {
+            reward = 0.0; // Unmodulated STDP learns from timing, never task reward.
+        } else if (config_.mode == Mode::ShuffledReward) {
             // Uninformative, exactly-balanced reward drawn from a per-phase
             // shuffled sequence (independent of the response).
             reward = shuffled_rewards_[shuffled_cursor_++];
@@ -199,6 +209,8 @@ TrialRecord Experiment::run_trial(
 void Experiment::run_phase(
     Phase phase, bool train, bool reversed, int episodes, int trials_per_episode)
 {
+    brain_.set_learning_enabled(train);
+    brain_.set_homeostasis_enabled(train && config_.mode == Mode::RewardSTDPHomeostasis);
     // For the shuffled-reward control, build an exactly-balanced (+1/-1)
     // sequence for this training phase and shuffle it. This keeps the reward
     // statistics identical to the informative condition while making it
@@ -212,7 +224,7 @@ void Experiment::run_phase(
             shuffled_rewards_.push_back((i % 2 == 0) ? config_.task.reward_correct
                                                     : config_.task.reward_incorrect);
         }
-        std::shuffle(shuffled_rewards_.begin(), shuffled_rewards_.end(), rng_);
+        std::shuffle(shuffled_rewards_.begin(), shuffled_rewards_.end(), reward_rng_);
         shuffled_cursor_ = 0;
     }
 
@@ -226,6 +238,8 @@ void Experiment::run_phase(
 }
 
 void Experiment::run_retention() {
+    brain_.set_learning_enabled(false);
+    brain_.set_homeostasis_enabled(false);
     // No-training interval: the network is left idle (no input, no reward) so
     // that only passive membrane decay occurs. Synaptic weights cannot change
     // because no reward is applied.
@@ -303,6 +317,16 @@ void Experiment::finalize_summary() {
     s.total_spikes = total_spikes;
     s.neuron_count = brain_.neuron_count();
     s.synapse_count = brain_.synapse_count();
+
+    double total_abs_homeostatic_bias = 0.0;
+    for (std::size_t index = 0; index < brain_.neuron_count(); ++index) {
+        total_abs_homeostatic_bias += std::abs(
+            brain_.homeostatic_bias_current_mV_per_ms(static_cast<NeuronId>(index)));
+    }
+    if (brain_.neuron_count() > 0) {
+        s.mean_abs_homeostatic_bias_mV_per_ms = total_abs_homeostatic_bias /
+            static_cast<double>(brain_.neuron_count());
+    }
 
     const double total_seconds = brain_.simulation_time_ms() / 1000.0;
     if (total_seconds > 0.0 && s.neuron_count > 0) {
