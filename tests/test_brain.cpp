@@ -210,7 +210,9 @@ void fixed_synapses_do_not_learn() {
 void plastic_inhibitory_synapse_keeps_its_polarity() {
     aliva::Brain brain(fast_plasticity());
     const auto source = brain.add_neuron(fast_spiking_neuron());
-    const auto target = brain.add_neuron(fast_spiking_neuron());
+    auto target_parameters = fast_spiking_neuron();
+    target_parameters.refractory_period_ms = 0.0;
+    const auto target = brain.add_neuron(target_parameters);
     brain.connect_plastic(source, target, -18.0);
 
     const std::array<double, 2> drive_source{20.0, 0.0};
