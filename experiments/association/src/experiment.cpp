@@ -316,6 +316,16 @@ void Experiment::finalize_summary() {
     s.neuron_count = brain_.neuron_count();
     s.synapse_count = brain_.synapse_count();
 
+    double total_abs_homeostatic_bias = 0.0;
+    for (std::size_t index = 0; index < brain_.neuron_count(); ++index) {
+        total_abs_homeostatic_bias += std::abs(
+            brain_.homeostatic_bias_current_mV_per_ms(static_cast<NeuronId>(index)));
+    }
+    if (brain_.neuron_count() > 0) {
+        s.mean_abs_homeostatic_bias_mV_per_ms = total_abs_homeostatic_bias /
+            static_cast<double>(brain_.neuron_count());
+    }
+
     const double total_seconds = brain_.simulation_time_ms() / 1000.0;
     if (total_seconds > 0.0 && s.neuron_count > 0) {
         s.mean_firing_rate_hz =
