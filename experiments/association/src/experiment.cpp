@@ -284,6 +284,10 @@ void Experiment::finalize_summary() {
     Summary& s = summary_;
     s.mode = config_.mode;
     s.seed = seed_;
+    s.homeostasis_target_firing_rate_hz = config_.homeostasis.target_firing_rate_hz;
+    s.homeostasis_rate_time_constant_ms = config_.homeostasis.rate_time_constant_ms;
+    s.homeostasis_adaptation_rate = config_.homeostasis.adaptation_rate_mV_per_ms_per_hz_second;
+    s.homeostasis_max_abs_bias_mV_per_ms = config_.homeostasis.max_abs_bias_current_mV_per_ms;
     s.total_trials = records_.size();
 
     s.episode_accuracy.clear();
