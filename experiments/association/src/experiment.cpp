@@ -19,6 +19,12 @@ Config validated_config(Config config) {
     return config;
 }
 
+HomeostasisParameters homeostasis_for_mode(const Config& config) {
+    HomeostasisParameters parameters = config.homeostasis;
+    parameters.enabled = (config.mode == Mode::RewardSTDPHomeostasis);
+    return parameters;
+}
+
 // The environment's knowledge of the correct response. This is the only place
 // the cue->response contingency is encoded; it is never wired into weights.
 std::size_t correct_response(Cue cue, bool reversed) noexcept {
@@ -68,7 +74,7 @@ Experiment::Experiment(Config config, std::uint64_t seed)
       seed_(seed),
       rng_(seed),
       plasticity_(config_.plasticity),
-      brain_(plasticity_),
+      brain_(plasticity_, homeostasis_for_mode(config_)),
       patterns_(make_cue_patterns(
           config_.network.num_input,
           config_.network.active_inputs_per_cue,
@@ -78,7 +84,7 @@ Experiment::Experiment(Config config, std::uint64_t seed)
           brain_,
           config_.network,
           patterns_,
-          config_.mode != Mode::Fixed,
+          config_.mode,
           rng_)) {
     summary_.mode = config_.mode;
     summary_.seed = seed_;
@@ -156,7 +162,9 @@ TrialRecord Experiment::run_trial(
     // separation at the API level.
     double reward = 0.0;
     if (train) {
-        if (config_.mode == Mode::ShuffledReward) {
+        if (config_.mode == Mode::OrdinarySTDP) {
+            reward = 0.0; // Unmodulated STDP learns from timing, never task reward.
+        } else if (config_.mode == Mode::ShuffledReward) {
             // Uninformative, exactly-balanced reward drawn from a per-phase
             // shuffled sequence (independent of the response).
             reward = shuffled_rewards_[shuffled_cursor_++];
@@ -199,6 +207,8 @@ TrialRecord Experiment::run_trial(
 void Experiment::run_phase(
     Phase phase, bool train, bool reversed, int episodes, int trials_per_episode)
 {
+    brain_.set_learning_enabled(train);
+    brain_.set_homeostasis_enabled(train && config_.mode == Mode::RewardSTDPHomeostasis);
     // For the shuffled-reward control, build an exactly-balanced (+1/-1)
     // sequence for this training phase and shuffle it. This keeps the reward
     // statistics identical to the informative condition while making it
@@ -226,6 +236,8 @@ void Experiment::run_phase(
 }
 
 void Experiment::run_retention() {
+    brain_.set_learning_enabled(false);
+    brain_.set_homeostasis_enabled(false);
     // No-training interval: the network is left idle (no input, no reward) so
     // that only passive membrane decay occurs. Synaptic weights cannot change
     // because no reward is applied.
