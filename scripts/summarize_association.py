@@ -36,14 +36,19 @@ def main() -> int:
     if not summaries:
         raise SystemExit(f"No *_summary.json files found in {results_dir}")
 
-    grouped: dict[str, list[dict]] = defaultdict(list)
+    grouped: dict[tuple, list[dict]] = defaultdict(list)
     for path in summaries:
         with path.open(encoding="utf-8") as stream:
             summary = json.load(stream)
-        grouped[summary["mode"]].append(summary)
+        key = (summary["mode"], summary["homeostasis_target_firing_rate_hz"], summary["homeostasis_rate_time_constant_ms"], summary["homeostasis_adaptation_rate"], summary["homeostasis_max_abs_bias_mV_per_ms"])
+        grouped[key].append(summary)
 
     fields = [
         "mode",
+        "homeostasis_target_hz",
+        "homeostasis_rate_tau_ms",
+        "homeostasis_adaptation_rate",
+        "homeostasis_max_abs_bias_mV_per_ms",
         "seed_count",
         "eval_accuracy_mean",
         "eval_accuracy_std",
@@ -60,7 +65,7 @@ def main() -> int:
     ]
 
     rows = []
-    for mode, runs in sorted(grouped.items()):
+    for (mode, target_hz, rate_tau_ms, adaptation_rate, max_bias), runs in sorted(grouped.items()):
         eval_mean, eval_std = mean_std([nested(run, "eval_accuracy") for run in runs])
         retention_mean, retention_std = mean_std([nested(run, "retention_accuracy") for run in runs])
         reversal_mean, reversal_std = mean_std([nested(run, "reversal_eval_accuracy") for run in runs])
@@ -70,6 +75,10 @@ def main() -> int:
         weight_mean, _ = mean_std([nested(run, "output_weights.mean_abs") for run in runs])
         rows.append({
             "mode": mode,
+            "homeostasis_target_hz": target_hz,
+            "homeostasis_rate_tau_ms": rate_tau_ms,
+            "homeostasis_adaptation_rate": adaptation_rate,
+            "homeostasis_max_abs_bias_mV_per_ms": max_bias,
             "seed_count": len(runs),
             "eval_accuracy_mean": eval_mean,
             "eval_accuracy_std": eval_std,
