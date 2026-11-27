@@ -173,7 +173,7 @@ Run the three conditions for one seed:
 ./build/aliva_association --mode shuffled --seed 1 --out /tmp/shuffled
 ```
 
-For a paired M2 comparison, run every mode with the same seed range (for example `--seeds 8 --seed 1`). The same seed reproduces cue patterns, connectivity, cue order, and noise across modes; only the learning rule and homeostasis condition differ.
+For a paired M2 comparison, run every mode with the same seed range (for example `--seeds 8 --seed 1`). The same seed reproduces cue patterns, connectivity, cue order, and noise across modes. Shuffled reward uses a separate RNG stream so its control bookkeeping cannot perturb the shared task randomness.
 
 Run several seeds and emit JSONL:
 
