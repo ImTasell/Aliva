@@ -5,12 +5,19 @@
 #include <cstdlib>
 #include <iostream>
 #include <numeric>
+#include <stdexcept>
 #include <utility>
 
 namespace aliva::assoc {
 namespace {
 
 constexpr double kInputCurrent_mV_per_ms = 3.0;
+
+// Validate before any dependent members are initialized.
+Config validated_config(Config config) {
+    config.validate();
+    return config;
+}
 
 // The environment's knowledge of the correct response. This is the only place
 // the cue->response contingency is encoded; it is never wired into weights.
@@ -57,7 +64,7 @@ std::string to_string(Phase phase) {
 }
 
 Experiment::Experiment(Config config, std::uint64_t seed)
-    : config_(std::move(config)),
+    : config_(validated_config(std::move(config))),
       seed_(seed),
       rng_(seed),
       plasticity_(config_.plasticity),
@@ -73,7 +80,6 @@ Experiment::Experiment(Config config, std::uint64_t seed)
           patterns_,
           config_.mode != Mode::Fixed,
           rng_)) {
-    config_.validate();
     summary_.mode = config_.mode;
     summary_.seed = seed_;
 }
