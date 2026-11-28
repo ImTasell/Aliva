@@ -61,6 +61,23 @@ def main() -> int:
         "mean_firing_rate_hz_mean",
         "mean_firing_rate_hz_std",
         "mean_abs_homeostatic_bias_mean",
+        "homeostatic_bias_saturation_fraction_mean",
+        "homeostatic_bias_saturation_fraction_std",
+        "input_mean_firing_rate_hz_mean",
+        "input_mean_firing_rate_hz_std",
+        "input_firing_rate_stddev_hz_mean",
+        "input_mean_abs_homeostatic_bias_mV_per_ms_mean",
+        "input_bias_saturation_fraction_mean",
+        "hidden_mean_firing_rate_hz_mean",
+        "hidden_mean_firing_rate_hz_std",
+        "hidden_firing_rate_stddev_hz_mean",
+        "hidden_mean_abs_homeostatic_bias_mV_per_ms_mean",
+        "hidden_bias_saturation_fraction_mean",
+        "output_mean_firing_rate_hz_mean",
+        "output_mean_firing_rate_hz_std",
+        "output_firing_rate_stddev_hz_mean",
+        "output_mean_abs_homeostatic_bias_mV_per_ms_mean",
+        "output_bias_saturation_fraction_mean",
         "output_weight_mean_abs_mean",
     ]
 
@@ -72,6 +89,31 @@ def main() -> int:
         firing_mean, firing_std = mean_std([nested(run, "mean_firing_rate_hz") for run in runs])
         reached = [nested(run, "trials_to_threshold") for run in runs if nested(run, "trials_to_threshold") >= 0]
         bias_mean, _ = mean_std([nested(run, "mean_abs_homeostatic_bias_mV_per_ms") for run in runs])
+        saturation_mean, saturation_std = mean_std([
+            nested(run, "homeostatic_bias_saturation_fraction") for run in runs
+        ])
+        population_metrics = {}
+        for population in ("input", "hidden", "output"):
+            prefix = f"{population}_population"
+            rate_mean, rate_std = mean_std([
+                nested(run, f"{prefix}.mean_firing_rate_hz") for run in runs
+            ])
+            within_run_rate_std, _ = mean_std([
+                nested(run, f"{prefix}.firing_rate_stddev_hz") for run in runs
+            ])
+            population_bias_mean, _ = mean_std([
+                nested(run, f"{prefix}.mean_abs_homeostatic_bias_mV_per_ms") for run in runs
+            ])
+            population_saturation_mean, _ = mean_std([
+                nested(run, f"{prefix}.bias_saturation_fraction") for run in runs
+            ])
+            population_metrics.update({
+                f"{population}_mean_firing_rate_hz_mean": rate_mean,
+                f"{population}_mean_firing_rate_hz_std": rate_std,
+                f"{population}_firing_rate_stddev_hz_mean": within_run_rate_std,
+                f"{population}_mean_abs_homeostatic_bias_mV_per_ms_mean": population_bias_mean,
+                f"{population}_bias_saturation_fraction_mean": population_saturation_mean,
+            })
         weight_mean, _ = mean_std([nested(run, "output_weights.mean_abs") for run in runs])
         rows.append({
             "mode": mode,
@@ -91,6 +133,9 @@ def main() -> int:
             "mean_firing_rate_hz_mean": firing_mean,
             "mean_firing_rate_hz_std": firing_std,
             "mean_abs_homeostatic_bias_mean": bias_mean,
+            "homeostatic_bias_saturation_fraction_mean": saturation_mean,
+            "homeostatic_bias_saturation_fraction_std": saturation_std,
+            **population_metrics,
             "output_weight_mean_abs_mean": weight_mean,
         })
 

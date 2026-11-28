@@ -327,10 +327,66 @@ void Experiment::finalize_summary() {
         total_abs_homeostatic_bias += std::abs(
             brain_.homeostatic_bias_current_mV_per_ms(static_cast<NeuronId>(index)));
     }
+    std::size_t saturated_bias_count = 0;
+    const double bias_limit = config_.homeostasis.max_abs_bias_current_mV_per_ms;
+    for (std::size_t index = 0; index < brain_.neuron_count(); ++index) {
+        const double bias = brain_.homeostatic_bias_current_mV_per_ms(
+            static_cast<NeuronId>(index));
+        if (std::abs(bias) >= bias_limit * (1.0 - 1e-9)) {
+            ++saturated_bias_count;
+        }
+    }
     if (brain_.neuron_count() > 0) {
         s.mean_abs_homeostatic_bias_mV_per_ms = total_abs_homeostatic_bias /
             static_cast<double>(brain_.neuron_count());
+        s.homeostatic_bias_saturation_fraction =
+            static_cast<double>(saturated_bias_count) /
+            static_cast<double>(brain_.neuron_count());
     }
+
+    // The neural core already maintains a filtered firing-rate estimate and
+    // intrinsic-bias value for every neuron. Aggregate those values by the
+    // stable population handles rather than adding a second telemetry path.
+    auto collect_population = [&](const auto& neuron_ids) {
+        PopulationStats stats;
+        stats.neuron_count = neuron_ids.size();
+        if (neuron_ids.empty()) {
+            return stats;
+        }
+
+        double rate_sum = 0.0;
+        double bias_sum = 0.0;
+        std::size_t saturated = 0;
+        for (const NeuronId id : neuron_ids) {
+            const double rate = brain_.estimated_firing_rate_hz(id);
+            const double bias = brain_.homeostatic_bias_current_mV_per_ms(id);
+            rate_sum += rate;
+            bias_sum += std::abs(bias);
+            if (std::abs(bias) >= bias_limit * (1.0 - 1e-9)) {
+                ++saturated;
+            }
+        }
+
+        const double count = static_cast<double>(stats.neuron_count);
+        stats.mean_firing_rate_hz = rate_sum / count;
+        stats.mean_abs_homeostatic_bias_mV_per_ms = bias_sum / count;
+        stats.bias_saturation_fraction =
+            static_cast<double>(saturated) / count;
+
+        double squared_deviation_sum = 0.0;
+        for (const NeuronId id : neuron_ids) {
+            const double difference =
+                brain_.estimated_firing_rate_hz(id) - stats.mean_firing_rate_hz;
+            squared_deviation_sum += difference * difference;
+        }
+        stats.firing_rate_stddev_hz =
+            std::sqrt(squared_deviation_sum / count);
+        return stats;
+    };
+
+    s.input_population = collect_population(handles_.input);
+    s.hidden_population = collect_population(handles_.hidden);
+    s.output_population = collect_population(handles_.output);
 
     const double total_seconds = brain_.simulation_time_ms() / 1000.0;
     if (total_seconds > 0.0 && s.neuron_count > 0) {

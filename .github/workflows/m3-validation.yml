@@ -1,0 +1,88 @@
+name: Aliva M3 learning validation
+
+on:
+  workflow_dispatch:
+    inputs:
+      seeds:
+        description: Number of paired seeds per condition
+        required: false
+        default: "32"
+      first_seed:
+        description: First RNG seed shared by every condition
+        required: false
+        default: "1"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/m3-validation.yml"
+      - "experiments/association/include/aliva/association/experiment.hpp"
+      - "experiments/association/src/experiment.cpp"
+      - "experiments/association/src/export.cpp"
+      - "scripts/summarize_association.py"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        run: cmake --build build --parallel
+
+      - name: Run paired-seed validation
+        env:
+          SEED_COUNT: ${{ github.event_name == 'workflow_dispatch' && inputs.seeds || '32' }}
+          FIRST_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.first_seed || '1' }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/m3-validation
+
+          echo "Reward-STDP baseline: ${SEED_COUNT} paired seeds"
+          ./build/aliva_association \
+            --mode reward \
+            --seed "${FIRST_SEED}" \
+            --seeds "${SEED_COUNT}" \
+            --format jsonl \
+            --out "artifacts/m3-validation/reward"
+
+          echo "Shuffled-reward negative control: ${SEED_COUNT} paired seeds"
+          ./build/aliva_association \
+            --mode shuffled \
+            --seed "${FIRST_SEED}" \
+            --seeds "${SEED_COUNT}" \
+            --format jsonl \
+            --out "artifacts/m3-validation/shuffled"
+
+          for max_bias in 0.15 0.25; do
+            prefix="artifacts/m3-validation/homeostasis-cap-${max_bias}"
+            echo "Reward-STDP + homeostasis (cap=${max_bias}): ${SEED_COUNT} paired seeds"
+            ./build/aliva_association \
+              --mode reward-homeostasis \
+              --seed "${FIRST_SEED}" \
+              --seeds "${SEED_COUNT}" \
+              --homeo-target 5 \
+              --homeo-adaptation 0.005 \
+              --homeo-max-bias "${max_bias}" \
+              --format jsonl \
+              --out "${prefix}"
+          done
+
+          python3 scripts/summarize_association.py \
+            artifacts/m3-validation \
+            artifacts/m3-validation/comparison.csv
+
+      - name: Upload validation results
+        uses: actions/upload-artifact@v4
+        with:
+          name: aliva-m3-validation
+          path: artifacts/m3-validation/
+          if-no-files-found: error
+          retention-days: 90
