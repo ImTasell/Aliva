@@ -43,6 +43,17 @@ struct WeightStats {
     double mean_abs{0.0};
 };
 
+// End-of-run telemetry for one anatomical population. Firing rates are the
+// neural core's exponentially filtered per-neuron estimates, sampled after
+// the final experiment phase.
+struct PopulationStats {
+    std::size_t neuron_count{0};
+    double mean_firing_rate_hz{0.0};
+    double firing_rate_stddev_hz{0.0};
+    double mean_abs_homeostatic_bias_mV_per_ms{0.0};
+    double bias_saturation_fraction{0.0};
+};
+
 // Aggregate metrics computed from a completed run.
 struct Summary {
     Mode mode{Mode::Fixed};
@@ -62,6 +73,10 @@ struct Summary {
     std::size_t total_spikes{0};
     double mean_firing_rate_hz{0.0};
     double mean_abs_homeostatic_bias_mV_per_ms{0.0};
+    double homeostatic_bias_saturation_fraction{0.0};
+    PopulationStats input_population;
+    PopulationStats hidden_population;
+    PopulationStats output_population;
     double homeostasis_target_firing_rate_hz{0.0};
     double homeostasis_rate_time_constant_ms{0.0};
     double homeostasis_adaptation_rate{0.0};
