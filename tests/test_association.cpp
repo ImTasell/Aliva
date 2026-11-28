@@ -334,6 +334,61 @@ void reversal_learning_adapts() {
 
 // --- Summary consistency ---------------------------------------------------
 
+void population_telemetry_covers_all_network_neurons() {
+    Config config;
+    config.mode = Mode::RewardSTDPHomeostasis;
+    config.homeostasis.target_firing_rate_hz = 5.0;
+    config.homeostasis.adaptation_rate_mV_per_ms_per_hz_second = 0.005;
+    config.homeostasis.max_abs_bias_current_mV_per_ms = 0.25;
+
+    Experiment experiment(config, 17);
+    experiment.run();
+    const Summary& summary = experiment.summary();
+
+    require(summary.input_population.neuron_count == config.network.num_input,
+            "Input telemetry must cover every input neuron.");
+    require(summary.hidden_population.neuron_count == config.network.num_hidden,
+            "Hidden telemetry must cover every hidden neuron.");
+    require(summary.output_population.neuron_count == config.network.num_output,
+            "Output telemetry must cover every output neuron.");
+    require(summary.input_population.neuron_count +
+                summary.hidden_population.neuron_count +
+                summary.output_population.neuron_count == summary.neuron_count,
+            "Population counts must account for the whole network.");
+
+    const PopulationStats* populations[] = {
+        &summary.input_population,
+        &summary.hidden_population,
+        &summary.output_population
+    };
+    for (const PopulationStats* population : populations) {
+        require(std::isfinite(population->mean_firing_rate_hz) &&
+                    population->mean_firing_rate_hz >= 0.0,
+                "Population firing-rate means must be finite and non-negative.");
+        require(std::isfinite(population->firing_rate_stddev_hz) &&
+                    population->firing_rate_stddev_hz >= 0.0,
+                "Population firing-rate deviations must be finite and non-negative.");
+        require(population->bias_saturation_fraction >= 0.0 &&
+                    population->bias_saturation_fraction <= 1.0,
+                "Population bias-saturation fractions must be in [0, 1].");
+    }
+    require(summary.homeostatic_bias_saturation_fraction >= 0.0 &&
+                summary.homeostatic_bias_saturation_fraction <= 1.0,
+            "Network bias-saturation fraction must be in [0, 1].");
+
+    const double weighted_saturation =
+        (summary.input_population.bias_saturation_fraction *
+             static_cast<double>(summary.input_population.neuron_count) +
+         summary.hidden_population.bias_saturation_fraction *
+             static_cast<double>(summary.hidden_population.neuron_count) +
+         summary.output_population.bias_saturation_fraction *
+             static_cast<double>(summary.output_population.neuron_count)) /
+        static_cast<double>(summary.neuron_count);
+    require(std::abs(weighted_saturation -
+                     summary.homeostatic_bias_saturation_fraction) < 1e-9,
+            "Network saturation fraction must agree with population fractions.");
+}
+
 void summary_is_consistent_with_records() {
     Config config;
     config.mode = Mode::RewardSTDP;
@@ -444,6 +499,7 @@ int main() {
         {"reward mode learns the association", reward_mode_learns_the_association},
         {"fixed and shuffled controls do not learn", fixed_and_shuffled_controls_do_not_learn},
         {"reversal learning adapts", reversal_learning_adapts},
+        {"population telemetry covers all network neurons", population_telemetry_covers_all_network_neurons},
         {"summary is consistent with records", summary_is_consistent_with_records},
         {"csv export writes header and rows", csv_export_writes_header_and_rows},
         {"jsonl export writes one object per trial", jsonl_export_writes_one_object_per_trial},
