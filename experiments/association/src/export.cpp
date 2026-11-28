@@ -85,6 +85,21 @@ void write_summary_json(const std::string& path, const Summary& summary) {
     out << "  \"total_spikes\": " << summary.total_spikes << ",\n";
     out << "  \"mean_firing_rate_hz\": " << summary.mean_firing_rate_hz << ",\n";
     out << "  \"mean_abs_homeostatic_bias_mV_per_ms\": " << summary.mean_abs_homeostatic_bias_mV_per_ms << ",\n";
+    out << "  \"homeostatic_bias_saturation_fraction\": " << summary.homeostatic_bias_saturation_fraction << ",\n";
+    auto write_population = [&](const char* name, const PopulationStats& population) {
+        out << "  \"" << name << "\": {\n";
+        out << "    \"neuron_count\": " << population.neuron_count << ",\n";
+        out << "    \"mean_firing_rate_hz\": " << population.mean_firing_rate_hz << ",\n";
+        out << "    \"firing_rate_stddev_hz\": " << population.firing_rate_stddev_hz << ",\n";
+        out << "    \"mean_abs_homeostatic_bias_mV_per_ms\": "
+            << population.mean_abs_homeostatic_bias_mV_per_ms << ",\n";
+        out << "    \"bias_saturation_fraction\": "
+            << population.bias_saturation_fraction << "\n";
+        out << "  },\n";
+    };
+    write_population("input_population", summary.input_population);
+    write_population("hidden_population", summary.hidden_population);
+    write_population("output_population", summary.output_population);
     out << "  \"homeostasis_target_firing_rate_hz\": " << summary.homeostasis_target_firing_rate_hz << ",\n";
     out << "  \"homeostasis_rate_time_constant_ms\": " << summary.homeostasis_rate_time_constant_ms << ",\n";
     out << "  \"homeostasis_adaptation_rate\": " << summary.homeostasis_adaptation_rate << ",\n";
